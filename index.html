@@ -1,0 +1,548 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Veckans Tilbud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: hyllkant – en klistrig filterlist överst, sedan kategorier som hyllsektioner med prislappar i rutnät */
+:root{
+  --bg:#f3f5f2; --surface:#ffffff; --ink:#15201b; --muted:#5d6b64; --line:#d9e0db;
+  --accent:#1f6b4a; --accent-ink:#ffffff; --tag:#ffd83d; --tag-ink:#1b1a10; --save:#c0281d;
+  --member:#6a3fb5; --chip:#e7ece8;
+  --f-display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101613; --surface:#17201b; --ink:#e6ede9; --muted:#9aaba2; --line:#2a3630;
+  --accent:#5cc08f; --accent-ink:#0b1510; --tag:#f2c935; --tag-ink:#1b1a10; --save:#ff7a6b;
+  --member:#b99bff; --chip:#1f2a24; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#101613; --surface:#17201b; --ink:#e6ede9; --muted:#9aaba2; --line:#2a3630;
+  --accent:#5cc08f; --accent-ink:#0b1510; --tag:#f2c935; --tag-ink:#1b1a10; --save:#ff7a6b;
+  --member:#b99bff; --chip:#1f2a24; color-scheme:dark }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:16px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding-block:14px 10px}
+h1{font-family:var(--f-display);font-weight:700;font-size:1.6rem;letter-spacing:-.01em;margin:0;line-height:1}
+.week{font-family:var(--f-mono);font-size:.78rem;color:var(--muted);letter-spacing:.02em}
+.grow{flex:1 1 auto}
+.search{flex:1 1 240px;min-width:0;display:flex}
+.search input{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit}
+.listbtn{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.listbtn .n{font-family:var(--f-mono);background:var(--accent-ink);color:var(--accent);border-radius:99px;padding:0 7px;font-size:.8rem}
+
+.row{display:flex;gap:6px;overflow-x:auto;padding-block:4px 8px;scrollbar-width:thin}
+.chip{flex:none;display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:.85rem;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip .dot{width:9px;height:9px;border-radius:50%;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.chip .c{font-family:var(--f-mono);font-size:.72rem;opacity:.65}
+.controls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-block:2px 12px;font-size:.85rem;color:var(--muted)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:6px 10px;font-size:.82rem}
+.seg button[aria-pressed="true"]{background:var(--chip);color:var(--ink);font-weight:600}
+select{font:inherit;font-size:.85rem;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+label.tg{display:flex;align-items:center;gap:6px;cursor:pointer}
+
+main{padding-block:18px 60px}
+.sec{margin-bottom:34px}
+.sec h2{display:flex;align-items:baseline;gap:10px;font-family:var(--f-display);font-weight:600;font-size:1.25rem;margin:0 0 12px;padding-bottom:6px;border-bottom:2px solid var(--ink);text-wrap:balance}
+.sec h2 .c{font-family:var(--f-mono);font-size:.78rem;color:var(--muted);font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.more{margin-top:12px;border:1px dashed var(--line);background:none;border-radius:8px;padding:9px 14px;color:var(--accent);font-weight:600}
+
+.card{display:flex;flex-direction:column;gap:8px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 12px 10px}
+.card .meta{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--muted);flex-wrap:wrap}
+.store{display:inline-flex;align-items:center;gap:5px;font-weight:600;color:var(--ink)}
+.store i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.card .da{font-size:.74rem;color:var(--muted);font-style:italic;margin-top:-5px;overflow-wrap:anywhere}
+.card h3{font-family:var(--f-body);font-weight:600;font-size:.95rem;line-height:1.25;margin:0;overflow-wrap:anywhere}
+.card p{margin:0;font-size:.8rem;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.pricebox{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:auto}
+.tag{background:var(--tag);color:var(--tag-ink);font-family:var(--f-mono);font-weight:600;padding:3px 8px 2px;border-radius:3px;font-size:1.15rem;line-height:1.2;font-variant-numeric:tabular-nums;clip-path:polygon(0 0,100% 0,100% 100%,8px 100%,0 calc(100% - 8px))}
+.tag small{font-size:.7rem;font-weight:500}
+.pre{font-family:var(--f-mono);font-size:.75rem;color:var(--muted);text-decoration:line-through}
+.unit{font-family:var(--f-mono);font-size:.72rem;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.badges{display:flex;gap:4px;flex-wrap:wrap}
+.b{font-size:.68rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid currentColor}
+.b.save{color:var(--save)} .b.mem{color:var(--member)} .b.soon{color:var(--accent)} .b.lim{color:var(--muted)}
+.add{border:1px solid var(--line);background:var(--chip);border-radius:7px;padding:5px 9px;font-size:.8rem;font-weight:600;white-space:nowrap}
+.add[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.empty{padding:40px 0;color:var(--muted);text-align:center}
+
+/* inköpslista */
+.drawer{position:fixed;inset:0 0 0 auto;width:min(420px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:40;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px);box-shadow:-10px 0 30px rgba(0,0,0,.15)}
+.drawer h2{font-family:var(--f-display);margin:0;font-size:1.3rem}
+.dhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.x{border:0;background:var(--chip);border-radius:8px;padding:6px 10px}
+.note{font-size:.78rem;color:var(--muted);margin:0 0 12px}
+.list{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px}
+.lgroup h4{margin:0 0 6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between}
+.li{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:.88rem}
+.li.done .nm{text-decoration:line-through;color:var(--muted)}
+.li .nm{min-width:0;overflow-wrap:anywhere}
+.li .pr{font-family:var(--f-mono);font-size:.8rem}
+.li .rm{border:0;background:none;color:var(--muted);font-size:1.1rem;padding:0 4px}
+.ltot{border-top:2px solid var(--ink);padding-top:10px;display:flex;justify-content:space-between;font-family:var(--f-mono);font-weight:600}
+.dactions{display:flex;gap:8px;margin-top:10px}
+.dactions button{flex:1;border:1px solid var(--line);background:var(--chip);border-radius:8px;padding:8px}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:30}
+.tabs{display:flex;gap:4px;padding-block:0 10px}
+.tab{border:0;background:none;padding:6px 2px;margin-right:14px;font-family:var(--f-display);font-weight:600;font-size:1.05rem;color:var(--muted);border-bottom:3px solid transparent}
+.tab[aria-selected="true"]{color:var(--ink);border-color:var(--accent)}
+.rform{display:grid;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:22px}
+.rrow{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.rrow > label{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);font-weight:600;letter-spacing:.02em}
+.rrow input[type=text]{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0;width:min(420px,100%)}
+.prefs{display:flex;flex-wrap:wrap;gap:6px}
+.go{border:0;border-radius:8px;padding:10px 18px;background:var(--accent);color:var(--accent-ink);font-weight:700}
+.go:disabled{opacity:.55;cursor:default}
+.ghost{border:1px solid var(--line);border-radius:8px;padding:9px 14px;background:none;font-weight:600}
+.rstatus{font-size:.85rem;color:var(--muted)}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.recipe{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.recipe h3{font-family:var(--f-display);font-size:1.2rem;margin:0;text-wrap:balance}
+.recipe .lead{margin:0;color:var(--muted);font-size:.88rem}
+.rmeta{display:flex;flex-wrap:wrap;gap:6px 14px;font-family:var(--f-mono);font-size:.75rem;color:var(--muted)}
+.rmeta b{color:var(--ink);font-weight:600}
+.recipe h4{margin:4px 0 0;font-size:.74rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.ing{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.ing li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.88rem}
+.ing .amt{color:var(--muted)}
+.ing .deal{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:.75rem;flex-wrap:wrap}
+.ing .deal .tag{font-size:.78rem;padding:1px 6px}
+.ing .home{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;align-self:center}
+.steps{margin:0;padding-left:20px;font-size:.88rem;display:flex;flex-direction:column;gap:6px}
+.steps li::marker{font-family:var(--f-mono);color:var(--accent);font-weight:600}
+.recipe .addall{align-self:flex-start}
+footer{color:var(--muted);font-size:.75rem;padding-block:0 30px}
+@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}.card:hover{border-color:var(--muted)}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <div>
+        <h1>Veckans Tilbud</h1>
+        <div class="week" id="week">Köpenhamn · hämtar erbjudanden…</div>
+      </div>
+      <div class="search"><input id="q" type="search" placeholder="Sök på svenska eller danska, t.ex. kaffe, lax, toalettpapper" aria-label="Sök erbjudanden"></div>
+      <button class="listbtn" id="openList" type="button">Inköpslista <span class="n" id="listN">0</span></button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" type="button" role="tab" id="tab-deals" aria-selected="true">Erbjudanden</button>
+      <button class="tab" type="button" role="tab" id="tab-recipes" aria-selected="false">Recept</button>
+    </div>
+    <div id="dealFilters">
+    <div class="row" id="stores" aria-label="Butiker"></div>
+    <div class="row" id="cats" aria-label="Kategorier"></div>
+    <div class="controls">
+      <div class="seg" id="when" role="group" aria-label="Giltighet">
+        <button type="button" data-v="all" aria-pressed="true">Alla</button>
+        <button type="button" data-v="now" aria-pressed="false">Gäller nu</button>
+        <button type="button" data-v="soon" aria-pressed="false">Kommande</button>
+      </div>
+      <label for="sort">Sortera
+        <select id="sort">
+          <option value="save">Störst rabatt</option>
+          <option value="unit">Lägst jämförpris</option>
+          <option value="price">Lägst pris</option>
+          <option value="name">Namn A–Ö</option>
+        </select>
+      </label>
+      <label class="tg" for="nonfood"><input type="checkbox" id="nonfood"> Visa non-food</label>
+      <label class="tg" for="nomember"><input type="checkbox" id="nomember"> Dölj medlemspriser</label>
+    </div>
+    </div>
+  </div>
+</header>
+
+<section class="wrap" id="recipes" hidden style="padding-block:18px 60px">
+  <form class="rform" id="rform">
+    <div class="rrow">
+      <label for="rstore">Butik<select id="rstore"></select></label>
+      <label for="rcount">Antal recept<select id="rcount"><option>3</option><option selected>4</option><option>6</option></select></label>
+      <label for="rserv">Portioner<select id="rserv"><option>1</option><option selected>2</option><option>4</option><option>6</option></select></label>
+    </div>
+    <div class="prefs" id="rprefs" aria-label="Önskemål">
+      <button class="chip" type="button" data-p="Vegetariskt" aria-pressed="false">Vegetariskt</button>
+      <button class="chip" type="button" data-p="Snabbt, högst 30 minuter" aria-pressed="false">Snabbt (≤ 30 min)</button>
+      <button class="chip" type="button" data-p="Barnvänligt" aria-pressed="false">Barnvänligt</button>
+      <button class="chip" type="button" data-p="Så billigt som möjligt" aria-pressed="false">Billigt</button>
+      <button class="chip" type="button" data-p="Passar som matlåda" aria-pressed="false">Matlåda</button>
+      <button class="chip" type="button" data-p="Proteinrikt" aria-pressed="false">Proteinrikt</button>
+      <button class="chip" type="button" data-p="Helgmiddag, får ta tid" aria-pressed="false">Helgmiddag</button>
+    </div>
+    <div class="rrow">
+      <label for="rwish" style="flex:1 1 280px">Egna önskemål (valfritt)<input type="text" id="rwish" placeholder="t.ex. något med kyckling, ingen koriander, asiatiskt"></label>
+    </div>
+    <div class="rrow">
+      <button class="go" type="submit" id="rgo">Generera recept</button>
+      <button class="ghost" type="button" id="rstop" hidden>Stoppa</button>
+      <span class="rstatus" id="rstatus"></span>
+    </div>
+  </form>
+  <div class="rgrid" id="rout"></div>
+</section>
+
+<main class="wrap" id="main"><div class="empty">Laddar veckans erbjudanden…</div></main>
+<footer class="wrap" id="foot"></footer>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="Inköpslista">
+  <div class="dhead"><h2>Inköpslista</h2><button class="x" id="closeList" type="button">Stäng</button></div>
+  <p class="note" id="syncNote">Listan sparas i den här webbläsaren.</p>
+  <div class="list" id="list"></div>
+  <div class="ltot" id="ltot" hidden></div>
+  <div class="dactions">
+    <button type="button" id="clearDone">Ta bort avbockade</button>
+    <button type="button" id="copyList">Kopiera lista</button>
+  </div>
+</aside>
+
+<script>
+const CATS = [
+  ["kott","Kött & fågel"],["chark","Chark & pålägg"],["fisk","Fisk & skaldjur"],
+  ["frukt","Frukt & bär"],["gront","Grönsaker"],["mejeri","Mejeri & ägg"],["ost","Ost"],
+  ["brod","Bröd & bageri"],["fryst","Fryst"],["fardig","Färdigmat & vego"],
+  ["torr","Torrvaror & skafferi"],["dryck","Drycker"],["godis","Godis & snacks"],
+  ["hushall","Hem & hushåll"],["hygien","Hygien & hälsa"],["djur","Djurmat"],["ovrigt","Övrigt (non-food)"]
+];
+const CATNAME = Object.fromEntries(CATS);
+const PER_SECTION = 12;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const kr = n => n == null ? "" : (Math.round(n*100)/100).toLocaleString("da-DK",{minimumFractionDigits: n%1 ? 2 : 0, maximumFractionDigits:2});
+const DAYS = ["sön","mån","tis","ons","tor","fre","lör"];
+const dshort = d => `${DAYS[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;
+
+const store = { get(k,f){ try{ const v=localStorage.getItem(k); return v==null?f:JSON.parse(v);}catch{return f} }, set(k,v){ try{localStorage.setItem(k,JSON.stringify(v))}catch{} } };
+
+let DATA = null, OFFERS = [];
+const st = Object.assign({ stores:null, cat:"all", when:"all", sort:"save", q:"", nonfood:false, nomember:false }, store.get("tilbud.ui", {}));
+st.q = "";
+const expanded = new Set();
+
+/* ---------- inköpslista: delad via db om möjligt, annars lokalt ---------- */
+let LIST = {};            // offerId -> item
+let dbList = null;        // CollectionReference
+function renderListCount(){ $("#listN").textContent = Object.values(LIST).filter(i=>!i.done).length; }
+async function initList(){
+  LIST = store.get("tilbud.list", {});
+  renderListCount();
+  const db = await (window.claude?.use?.("db") ?? null);
+  if (!db) return;
+  try {
+    dbList = db.collection("lista");
+    $("#syncNote").textContent = "Listan delas med alla som har länken till appen.";
+    dbList.onSnapshot(snap => {
+      LIST = {};
+      snap.docs.forEach(d => { LIST[d.id] = d.data(); });
+      renderListCount(); if (!$("#drawer").hidden) renderList(); syncAddButtons();
+    }, () => { dbList = null; $("#syncNote").textContent = "Delningen är inte tillgänglig just nu. Listan sparas i den här webbläsaren."; });
+  } catch { dbList = null; }
+}
+async function toggleItem(o){
+  const has = !!LIST[o.id];
+  if (has) { delete LIST[o.id]; } else {
+    LIST[o.id] = { n:o.sv||o.n, da:o.n, s:o.s, p:o.p, t:o.t, c:o.c, done:false, at:Date.now() };
+  }
+  renderListCount(); syncAddButtons();
+  if (dbList) {
+    try { has ? await dbList.doc(o.id).delete() : await dbList.doc(o.id).set(LIST[o.id]); }
+    catch(e){ $("#syncNote").textContent = "Kunde inte spara i den delade listan. Du kanske bara har läsbehörighet."; }
+  } else store.set("tilbud.list", LIST);
+}
+async function setDone(id, done){
+  if (!LIST[id]) return;
+  LIST[id] = {...LIST[id], done};
+  renderList(); renderListCount();
+  if (dbList) { try { await dbList.doc(id).update({done}); } catch{} } else store.set("tilbud.list", LIST);
+}
+async function removeItem(id){
+  delete LIST[id]; renderList(); renderListCount(); syncAddButtons();
+  if (dbList) { try { await dbList.doc(id).delete(); } catch{} } else store.set("tilbud.list", LIST);
+}
+function renderList(){
+  const items = Object.entries(LIST);
+  const el = $("#list");
+  if (!items.length){ el.innerHTML = `<div class="empty">Listan är tom. Tryck på <b>+ Lista</b> på ett erbjudande för att lägga till det.</div>`; $("#ltot").hidden = true; return; }
+  const by = {};
+  items.forEach(([id,i]) => (by[i.s] ??= []).push([id,i]));
+  let tot = 0;
+  el.innerHTML = Object.entries(by).map(([sid, arr]) => {
+    const s = DATA?.stores[sid] || {name:sid,color:"#888"};
+    const sum = arr.filter(([,i])=>!i.done).reduce((a,[,i])=>a+(i.p||0),0); tot += sum;
+    arr.sort((a,b)=>a[1].done-b[1].done || (a[1].c||"").localeCompare(b[1].c||""));
+    return `<div class="lgroup"><h4><span class="store"><i style="background:${s.color}"></i>${esc(s.name)}</span><span class="pr">${kr(sum)} kr</span></h4>` +
+      arr.map(([id,i]) => `<div class="li ${i.done?"done":""}">
+        <input type="checkbox" id="chk-${esc(id)}" data-id="${esc(id)}" ${i.done?"checked":""} aria-label="Bocka av ${esc(i.n)}">
+        <label class="nm" for="chk-${esc(id)}">${esc(i.n)}${i.da && i.da!==i.n ? `<br><small lang="da" style="color:var(--muted);font-style:italic">${esc(i.da)}</small>` : ""}</label>
+        <span class="pr">${kr(i.p)}</span>
+        <button class="rm" type="button" data-rm="${esc(id)}" aria-label="Ta bort">×</button></div>`).join("") + `</div>`;
+  }).join("");
+  $("#ltot").hidden = false;
+  $("#ltot").innerHTML = `<span>Kvar att köpa</span><span>${kr(tot)} kr</span>`;
+}
+$("#list").addEventListener("change", e => { const id = e.target.dataset.id; if (id) setDone(id, e.target.checked); });
+$("#list").addEventListener("click", e => { const id = e.target.dataset.rm; if (id) removeItem(id); });
+$("#clearDone").onclick = () => Object.entries(LIST).filter(([,i])=>i.done).forEach(([id])=>removeItem(id));
+$("#copyList").onclick = async () => {
+  const lines = []; const by = {};
+  Object.values(LIST).filter(i=>!i.done).forEach(i => (by[i.s] ??= []).push(i));
+  Object.entries(by).forEach(([sid,arr]) => { lines.push((DATA?.stores[sid]?.name||sid).toUpperCase()); arr.forEach(i=>lines.push(`- ${i.n}${i.da && i.da!==i.n ? ` [${i.da}]` : ""} (${kr(i.p)} kr)`)); lines.push(""); });
+  const txt = lines.join("\n").trim();
+  try { await navigator.clipboard.writeText(txt); $("#copyList").textContent = "Kopierad"; setTimeout(()=>$("#copyList").textContent="Kopiera lista",1500); }
+  catch { $("#syncNote").textContent = txt; }
+};
+function openList(open){ $("#drawer").hidden = !open; $("#scrim").hidden = !open; if (open) renderList(); }
+$("#openList").onclick = () => openList(true);
+$("#closeList").onclick = $("#scrim").onclick = () => openList(false);
+document.addEventListener("keydown", e => { if (e.key === "Escape") openList(false); });
+function syncAddButtons(){ document.querySelectorAll(".add").forEach(b => { const on = !!LIST[b.dataset.id]; b.setAttribute("aria-pressed", on); b.textContent = on ? "✓ På listan" : "+ Lista"; }); }
+
+/* ---------- filter & rendering ---------- */
+function saveUi(){ const {q, ...rest} = st; store.set("tilbud.ui", rest); }
+function status(o, now){ const f = new Date(o.f), t = new Date(o.t); return f > now ? "soon" : (t >= now ? "now" : "old"); }
+function discount(o){ return o.pp && o.pp > o.p ? (o.pp - o.p) / o.pp : 0; }
+
+function filtered(ignoreCat){
+  const now = new Date(), q = st.q.trim().toLowerCase();
+  return OFFERS.filter(o => {
+    if (!st.stores.includes(o.s)) return false;
+    const s = status(o, now); if (s === "old") return false;
+    if (st.when !== "all" && s !== st.when) return false;
+    if (!st.nonfood && o.c === "ovrigt" && st.cat !== "ovrigt") return false;
+    if (st.nomember && o.m) return false;
+    if (!ignoreCat && st.cat !== "all" && o.c !== st.cat) return false;
+    if (q && !(o.n.toLowerCase().includes(q) || (o.sv||"").toLowerCase().includes(q) || o.d.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+function sorter(a,b){
+  switch(st.sort){
+    case "unit": return (a.uu===b.uu ? 0 : (a.uu||"z").localeCompare(b.uu||"z")) || (a.up??1e9)-(b.up??1e9);
+    case "price": return (a.p??1e9)-(b.p??1e9);
+    case "name": return (a.sv||a.n).localeCompare(b.sv||b.n,"sv");
+    default: return discount(b)-discount(a) || (a.up??1e9)-(b.up??1e9);
+  }
+}
+function card(o, now){
+  const s = DATA.stores[o.s], d = discount(o), stt = status(o, now);
+  const when = stt === "soon" ? `från ${dshort(new Date(o.f))}` : `t.o.m. ${dshort(new Date(o.t))}`;
+  const on = !!LIST[o.id];
+  return `<article class="card">
+    <div class="meta"><span class="store"><i style="background:${s.color}"></i>${esc(s.name)}</span><span>· ${when}</span></div>
+    <h3>${esc(o.sv || o.n)}</h3>
+    ${o.sv ? `<div class="da" lang="da">${esc(o.n)}</div>` : ""}
+    ${o.d ? `<p title="${esc(o.d)}">${esc(o.d)}</p>` : ""}
+    <div class="badges">
+      ${d >= 0.05 ? `<span class="b save">−${Math.round(d*100)} %</span>` : ""}
+      ${o.m ? `<span class="b mem">Medlemspris</span>` : ""}
+      ${stt === "soon" ? `<span class="b soon">Kommande</span>` : ""}
+      ${o.lim ? `<span class="b lim">Max antal</span>` : ""}
+    </div>
+    <div class="pricebox">
+      <div>
+        ${o.pp && o.pp > o.p ? `<div class="pre">${kr(o.pp)} kr</div>` : ""}
+        <span class="tag">${kr(o.p)}<small> kr</small></span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+        ${o.up ? `<div class="unit">${kr(o.up)} kr/${o.uu}</div>` : ""}
+        <button class="add" type="button" data-id="${esc(o.id)}" aria-pressed="${on}">${on ? "✓ På listan" : "+ Lista"}</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+function renderChips(){
+  const base = filtered(true);
+  const counts = {}; base.forEach(o => counts[o.c] = (counts[o.c]||0)+1);
+  const visibleCats = CATS.filter(([k]) => k !== "ovrigt" || st.nonfood);
+  $("#cats").innerHTML = `<button class="chip" type="button" data-cat="all" aria-pressed="${st.cat==="all"}">Alla <span class="c">${base.length}</span></button>` +
+    visibleCats.map(([k,n]) => `<button class="chip" type="button" data-cat="${k}" aria-pressed="${st.cat===k}">${n} <span class="c">${counts[k]||0}</span></button>`).join("");
+  const now = new Date();
+  const sc = {}; OFFERS.forEach(o => { if (status(o,now)!=="old" && (st.nonfood || o.c!=="ovrigt")) sc[o.s]=(sc[o.s]||0)+1; });
+  $("#stores").innerHTML = Object.entries(DATA.stores).map(([id,s]) =>
+    `<button class="chip" type="button" data-store="${id}" aria-pressed="${st.stores.includes(id)}"><span class="dot" style="background:${s.color}"></span>${esc(s.name)} <span class="c">${sc[id]||0}</span></button>`).join("");
+}
+function render(){
+  renderChips();
+  const now = new Date();
+  const list = filtered(false).sort(sorter);
+  const main = $("#main");
+  if (!list.length){ main.innerHTML = `<div class="empty">Inga erbjudanden matchar. Prova att välja fler butiker eller rensa sökningen.</div>`; return; }
+  if (st.cat !== "all"){
+    main.innerHTML = `<section class="sec"><h2>${esc(CATNAME[st.cat])} <span class="c">${list.length} erbjudanden</span></h2><div class="grid">${list.map(o=>card(o,now)).join("")}</div></section>`;
+    return;
+  }
+  const by = {}; list.forEach(o => (by[o.c] ??= []).push(o));
+  main.innerHTML = CATS.filter(([k]) => by[k]).map(([k,n]) => {
+    const arr = by[k], open = expanded.has(k) || st.q;
+    const shown = open ? arr : arr.slice(0, PER_SECTION);
+    return `<section class="sec" id="sec-${k}"><h2>${esc(n)} <span class="c">${arr.length}</span></h2>
+      <div class="grid">${shown.map(o=>card(o,now)).join("")}</div>
+      ${arr.length > shown.length ? `<button class="more" type="button" data-more="${k}">Visa alla ${arr.length} i ${esc(n)}</button>` : ""}</section>`;
+  }).join("");
+}
+
+$("#cats").addEventListener("click", e => { const b = e.target.closest("[data-cat]"); if (!b) return; st.cat = b.dataset.cat; saveUi(); render(); window.scrollTo({top:0}); });
+$("#stores").addEventListener("click", e => { const b = e.target.closest("[data-store]"); if (!b) return; const id=b.dataset.store;
+  st.stores = st.stores.includes(id) ? st.stores.filter(x=>x!==id) : [...st.stores, id]; saveUi(); render(); });
+$("#when").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; st.when = b.dataset.v;
+  $("#when").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", x===b)); saveUi(); render(); });
+$("#sort").onchange = e => { st.sort = e.target.value; saveUi(); render(); };
+$("#nonfood").onchange = e => { st.nonfood = e.target.checked; if (!st.nonfood && st.cat==="ovrigt") st.cat="all"; saveUi(); render(); };
+$("#nomember").onchange = e => { st.nomember = e.target.checked; saveUi(); render(); };
+let qt; $("#q").addEventListener("input", e => { clearTimeout(qt); qt = setTimeout(()=>{ st.q = e.target.value; render(); }, 150); });
+$("#main").addEventListener("click", e => {
+  const m = e.target.closest("[data-more]"); if (m){ expanded.add(m.dataset.more); render(); return; }
+  const a = e.target.closest(".add"); if (a){ const o = OFFERS.find(x=>x.id===a.dataset.id); if (o) toggleItem(o); }
+});
+
+async function boot(){
+  try {
+    const r = await fetch("data.json", {cache:"no-cache"});
+    DATA = await r.json();
+  } catch {
+    $("#main").innerHTML = `<div class="empty">Kunde inte läsa in erbjudandena. Ladda om sidan.</div>`; return;
+  }
+  OFFERS = DATA.offers;
+  if (!Array.isArray(st.stores) || !st.stores.length) st.stores = Object.keys(DATA.stores);
+  st.stores = st.stores.filter(s => DATA.stores[s]);
+  $("#sort").value = st.sort; $("#nonfood").checked = st.nonfood; $("#nomember").checked = st.nomember;
+  $("#when").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", x.dataset.v===st.when));
+  const u = new Date(DATA.updated);
+  const wk = (d => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day); const y = new Date(Date.UTC(t.getUTCFullYear(),0,1)); return Math.ceil(((t-y)/864e5+1)/7); })(new Date());
+  $("#week").textContent = `Köpenhamn · vecka ${wk} · uppdaterad ${dshort(u)} ${u.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"})}`;
+  $("#foot").textContent = `Källa: tilbudsaviser via eTilbudsavis/Tjek. Kategorierna sätts automatiskt efter produktnamnet och kan ibland bli fel. Produktnamnen är översatta till svenska med det danska originalnamnet under, så att ni känner igen varan på hyllan. Kontrollera alltid pris och villkor i butiken.`;
+  render();
+}
+/* ---------- recept ---------- */
+const RECIPE_CATS = new Set(["kott","chark","fisk","frukt","gront","mejeri","ost","brod","fryst","fardig","torr"]);
+let sampleFn = null, rctl = null, lastRecipes = store.get("tilbud.recipes", null);
+function setTab(t){
+  const r = t === "recipes";
+  $("#tab-deals").setAttribute("aria-selected", !r); $("#tab-recipes").setAttribute("aria-selected", r);
+  $("#dealFilters").hidden = r; $("#main").hidden = r; $("#recipes").hidden = !r;
+  $(".search").style.visibility = r ? "hidden" : "";
+  st.tab = t; saveUi();
+}
+$("#tab-deals").onclick = () => setTab("deals");
+$("#tab-recipes").onclick = () => setTab("recipes");
+$("#rprefs").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); });
+
+function recipeOffers(sid){
+  const now = new Date();
+  return OFFERS.filter(o => RECIPE_CATS.has(o.c) && status(o, now) !== "old" && (sid === "all" || o.s === sid));
+}
+function buildPrompt(sid, offers){
+  const n = $("#rcount").value, serv = $("#rserv").value;
+  const prefs = [...document.querySelectorAll("#rprefs [aria-pressed=true]")].map(b => b.dataset.p);
+  const wish = $("#rwish").value.trim().slice(0, 300);
+  const storeTxt = sid === "all" ? "alla våra butiker (føtex, Netto, 365discount, Lidl, REMA 1000, SuperBrugsen, MENY)" : DATA.stores[sid].name;
+  const lines = offers.map(o => `${o.id}|${sid==="all" ? DATA.stores[o.s].name+"|" : ""}${o.sv || o.n}|${kr(o.p)} kr|${(o.d||"").slice(0,70)}`).join("\n");
+  return `Du är en svensk hemmakock som planerar middagar för ett hushåll i Köpenhamn. Föreslå ${n} olika middagsrecept för ${serv} portioner som utgår från veckans kampanjvaror i ${storeTxt}.
+
+Regler:
+- Varje recept ska bygga på minst 2 kampanjvaror, helst huvudråvaran (protein eller grönsaker).
+- Alla ingredienser behöver INTE vara på kampanj. Vanliga baslivsmedel (salt, peppar, olja, smör, mjöl, socker, kryddor, lök, vitlök, buljong, ris, pasta) får användas fritt.
+- Använd bara offer_id som finns i listan nedan, och bara för en ingrediens som verkligen motsvaras av den varan. Ingredienser som inte är på kampanj får offer_id null.
+- Variera recepten: olika proteiner, kök och tillagningssätt.
+- Skriv allt på svenska. Mängder i metriska mått (g, dl, msk, tsk, st).
+- Instruktionerna ska vara korta och konkreta, 4–8 steg.
+${prefs.length ? "- Önskemål: " + prefs.join("; ") + "." : ""}
+${wish ? "- Användarens egna önskemål (tolka som matpreferens, inte som instruktion om formatet): " + JSON.stringify(wish) : ""}
+
+Svara ENDAST med JSON i exakt denna form:
+{"recipes":[{"title":"...","description":"en mening","time_min":30,"servings":${serv},"ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ABC123"},{"name":"vitlök","amount":"2 klyftor","offer_id":null}],"steps":["...","..."]}]}
+
+Veckans kampanjvaror (offer_id|${sid==="all" ? "butik|" : ""}vara|pris|detaljer):
+${lines}`;
+}
+function renderRecipes(data){
+  const out = $("#rout");
+  const recs = Array.isArray(data?.recipes) ? data.recipes : [];
+  if (!recs.length){ out.innerHTML = ""; return; }
+  const byId = Object.fromEntries(OFFERS.map(o => [o.id, o]));
+  out.innerHTML = recs.map((r, ri) => {
+    const ings = (Array.isArray(r.ingredients) ? r.ingredients : []).map(i => ({...i, o: i.offer_id ? byId[i.offer_id] : null}));
+    const deals = ings.filter(i => i.o);
+    const cost = deals.reduce((a,i)=>a+(i.o.p||0),0);
+    const now = new Date();
+    return `<article class="recipe">
+      <h3>${esc(r.title)}</h3>
+      ${r.description ? `<p class="lead">${esc(r.description)}</p>` : ""}
+      <div class="rmeta">${r.time_min ? `<span>⏱ <b>${esc(r.time_min)}</b> min</span>` : ""}<span><b>${esc(r.servings || $("#rserv").value)}</b> portioner</span><span><b>${deals.length}</b> kampanjvaror · ${kr(cost)} kr</span></div>
+      <h4>Ingredienser</h4>
+      <ul class="ing">${ings.map(i => {
+        const o = i.o, s = o && DATA.stores[o.s];
+        return `<li><span>${esc(i.name)}</span><span class="amt">${esc(i.amount || "")}</span>${o ? `
+          <span class="deal"><span class="store"><i style="background:${s.color}"></i>${esc(s.name)}</span><span class="tag">${kr(o.p)}<small> kr</small></span><span style="color:var(--muted)">${esc(o.sv || o.n)}${status(o,now)==="soon" ? ` · från ${dshort(new Date(o.f))}` : ""}</span>
+          <button class="add" type="button" data-id="${esc(o.id)}" aria-pressed="${!!LIST[o.id]}">${LIST[o.id] ? "✓ På listan" : "+ Lista"}</button></span>` : ``}</li>`;
+      }).join("")}</ul>
+      <h4>Gör så här</h4>
+      <ol class="steps">${(Array.isArray(r.steps) ? r.steps : []).map(x => `<li>${esc(x)}</li>`).join("")}</ol>
+      ${deals.length ? `<button class="ghost addall" type="button" data-addall="${ri}">Lägg alla kampanjvaror i listan</button>` : ""}
+    </article>`;
+  }).join("");
+  out._recs = recs.map(r => (Array.isArray(r.ingredients) ? r.ingredients : []).map(i => i.offer_id).filter(id => byId[id]));
+}
+$("#rout").addEventListener("click", e => {
+  const a = e.target.closest(".add"); if (a){ const o = OFFERS.find(x=>x.id===a.dataset.id); if (o) toggleItem(o); return; }
+  const all = e.target.closest("[data-addall]");
+  if (all){ const ids = $("#rout")._recs?.[+all.dataset.addall] || [];
+    ids.forEach(id => { if (!LIST[id]) { const o = OFFERS.find(x=>x.id===id); if (o) toggleItem(o); } });
+    all.textContent = "Tillagt i listan"; }
+});
+$("#rstop").onclick = () => rctl?.abort();
+$("#rform").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!sampleFn || !DATA) return;
+  const sid = $("#rstore").value, offers = recipeOffers(sid);
+  if (offers.length < 3){ $("#rstatus").textContent = "För få kampanjvaror i den här butiken just nu. Välj en annan butik."; return; }
+  rctl = new AbortController();
+  $("#rgo").disabled = true; $("#rstop").hidden = false;
+  $("#rstatus").textContent = `Claude tittar på ${offers.length} kampanjvaror och tänker ut recept… (brukar ta 20–60 sekunder)`;
+  try {
+    const data = await sampleFn.json(buildPrompt(sid, offers), { signal: rctl.signal, cache: false, onText: () => { $("#rstatus").textContent = "Skriver recepten…"; } });
+    if (!Array.isArray(data?.recipes) || !data.recipes.length) throw {code:"invalid_json"};
+    lastRecipes = { sid, data, at: Date.now() }; store.set("tilbud.recipes", lastRecipes);
+    renderRecipes(data);
+    $("#rstatus").textContent = `${data.recipes.length} recept från ${sid === "all" ? "alla butiker" : DATA.stores[sid].name}. Tryck igen för nya förslag.`;
+  } catch (err) {
+    const c = err?.code;
+    $("#rstatus").textContent =
+      c === "cancelled" ? "Stoppat." :
+      c === "not_granted" || c === "sampling_disabled" || c === "not_declared" ? "Receptfunktionen kräver att du tillåter appen att använda Claude. Ladda om sidan och välj Tillåt." :
+      c === "rate_limited" ? "För många förfrågningar just nu. Vänta en stund och försök igen." :
+      c === "invalid_json" ? "Svaret gick inte att läsa. Tryck på Generera recept igen." :
+      c === "prompt_too_large" ? "För många varor att skicka. Välj en enskild butik i stället för alla." :
+      "Något gick fel med anslutningen. Försök igen.";
+    if (c === "not_granted" || c === "sampling_disabled" || c === "not_declared") sampleFn = null;
+  } finally {
+    $("#rgo").disabled = !sampleFn;
+    $("#rstop").hidden = true;
+  }
+});
+async function initRecipes(){
+  sampleFn = await (window.claude?.use?.("sample") ?? null);
+  if (!sampleFn){ $("#rgo").disabled = true; $("#rstatus").textContent = "Receptfunktionen fungerar bara när appen är öppen i Claude."; }
+}
+function bootRecipes(){
+  $("#rstore").innerHTML = Object.entries(DATA.stores).map(([id,s]) => `<option value="${id}">${esc(s.name)} (${recipeOffers(id).length} varor)</option>`).join("") + `<option value="all">Alla butiker</option>`;
+  if (lastRecipes?.sid) $("#rstore").value = lastRecipes.sid;
+  if (lastRecipes?.data) { renderRecipes(lastRecipes.data); $("#rstatus").textContent = "Senaste förslagen. Tryck på Generera recept för nya."; }
+  if (st.tab === "recipes") setTab("recipes");
+}
+initList();
+initRecipes();
+boot().then(() => DATA && bootRecipes());
+</script>
