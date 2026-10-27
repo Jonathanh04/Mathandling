@@ -600,7 +600,7 @@ const byIdAll = () => Object.fromEntries(OFFERS.map(o => [o.id, o]));
 function cheaper(a, b){ return (a.up && b.up && a.uu === b.uu) ? a.up - b.up : (a.p ?? 1e9) - (b.p ?? 1e9); }
 function dishPrompt(dish, serv, offers){
   const lines = offers.map(o => `${o.id}|${DATA.stores[o.s].name}|${o.sv || o.n}|${o.n}|${kr(o.p)} kr${o.up ? ` (${kr(o.up)} kr/${o.uu})` : ""}|${(o.d||"").slice(0,80)}`).join("\n");
-  return `Användaren vill laga maträtten ${JSON.stringify(dish)} för ${serv} portioner och vill veta i vilken butik i Köpenhamn ingredienserna är billigast eller håller bäst kvalitet denna vecka.
+  return `Användaren vill laga maträtten ${JSON.stringify(dish)} för ${serv} portioner och vill veta i vilken butik i Köpenhamn ingredienserna är billigast eller håller bäst kvalitet idag. Listan nedan innehåller bara erbjudanden som gäller idag; använd inga andra.
 
 Gör så här:
 1. Lista ingredienserna en vanlig version av rätten behöver (svenska namn, metriska mängder för ${serv} portioner). Markera basvaror de flesta har hemma (salt, peppar, olja, kryddor) med "pantry": true.
@@ -611,14 +611,16 @@ Gör så här:
 Svara ENDAST med JSON i exakt denna form:
 {"dish":"Tuna melt","servings":${serv},"summary":"...","ingredients":[{"name":"tonfisk i vatten","amount":"2 burkar (à 185 g)","pantry":false,"matches":["ID1","ID2"],"quality":{"offer_id":"ID2","why":"MSC-märkt, hela bitar i olivolja"}}]}
 
-Veckans erbjudanden (offer_id|butik|svenskt namn|danskt namn|pris|detaljer):
+Erbjudanden som gäller idag (offer_id|butik|svenskt namn|danskt namn|pris|detaljer):
 ${lines}`;
 }
 function renderDish(data){
   const out = $("#dout"), byId = byIdAll(), now = new Date();
   const ings = (Array.isArray(data?.ingredients) ? data.ingredients : []).map(i => {
-    const m = (Array.isArray(i.matches) ? i.matches : []).map(id => byId[id]).filter(o => o && status(o, now) !== "old").sort(cheaper);
-    const q = i.quality?.offer_id && byId[i.quality.offer_id] ? byId[i.quality.offer_id] : null;
+    // Endast kampanjvaror som gäller idag, aldrig kommande eller utgångna
+    const m = (Array.isArray(i.matches) ? i.matches : []).map(id => byId[id]).filter(o => o && status(o, now) === "now").sort(cheaper);
+    const qo = i.quality?.offer_id ? byId[i.quality.offer_id] : null;
+    const q = qo && status(qo, now) === "now" ? qo : null;
     return { name: String(i.name || ""), amount: String(i.amount || ""), pantry: !!i.pantry, m, q, why: i.quality?.why || "" };
   });
   const need = ings.filter(i => !i.pantry && i.m.length);
@@ -636,12 +638,12 @@ function renderDish(data){
   const qbest = Object.entries(qc).sort((a,b)=>b[1]-a[1])[0];
   const chip = sid => `<i style="background:${DATA.stores[sid].color}"></i>${esc(DATA.stores[sid].name)}`;
   const offerLine = o => `<div class="line"><span class="store">${chip(o.s)}</span><span class="tag">${kr(o.p)}<small> kr</small></span>${o.up ? `<span class="unit">${kr(o.up)} kr/${o.uu}</span>` : ""}<button class="add" type="button" data-id="${esc(o.id)}" aria-pressed="${!!LIST[o.id]}">${LIST[o.id] ? "✓ På listan" : "+ Lista"}</button></div>
-      <div class="pn">${esc(o.sv || o.n)}${status(o,now)==="soon" ? ` <span class="b soon">från ${dshort(new Date(o.f))}</span>` : ""}${o.m ? ` <span class="b mem">Medlemspris</span>` : ""}</div>`;
+      <div class="pn">${esc(o.sv || o.n)} <span class="alt">t.o.m. ${dshort(new Date(o.t))}</span>${o.m ? ` <span class="b mem">Medlemspris</span>` : ""}</div>`;
   const max = Math.max(1, ...per.map(p => p.n));
   out._sets = { one: one?.picks.map(o=>o.id) || [], split: split.map(o=>o.id), qual: qual.map(o=>o.id) };
   out.innerHTML = `
     <div class="dhero"><h2>${esc(data.dish || "")}</h2>${data.summary ? `<p>${esc(data.summary)}</p>` : ""}
-      <p style="font-size:.82rem">${need.length} av ${ings.filter(i=>!i.pantry).length} ingredienser finns på kampanj någonstans den här veckan.</p></div>
+      <p style="font-size:.82rem">${need.length} av ${ings.filter(i=>!i.pantry).length} ingredienser finns på kampanj idag (${dshort(now)}). Bara erbjudanden som gäller idag är med.</p></div>
     ${need.length ? `<div class="tiles">
       <div class="tile"><span class="k">Allt i en butik</span><span class="v">${chip(one.sid)}</span>
         <span class="s">${one.n} av ${need.length} kampanjvaror · ${kr(one.sum)} kr</span>
@@ -659,7 +661,7 @@ function renderDish(data){
     <div class="ingtable">${ings.map(i => `<div class="irow">
       <div><div class="iname">${esc(i.name)}</div><div class="iamt">${esc(i.amount)}</div></div>
       ${i.pantry ? `<div class="none" style="grid-column:2/-1">Basvara, finns oftast hemma.</div>` :
-        !i.m.length ? `<div class="none" style="grid-column:2/-1">Inte på kampanj någonstans den här veckan. Köp där du ändå handlar.</div>` : `
+        !i.m.length ? `<div class="none" style="grid-column:2/-1">Inte på kampanj någonstans idag. Köp där du ändå handlar.</div>` : `
       <div class="pick"><span class="lbl cheap">Billigast</span>${offerLine(i.m[0])}${i.m.length > 1 ? `<span class="alt">Även i: ${[...new Set(i.m.slice(1).map(o => DATA.stores[o.s].name))].join(", ")}</span>` : ""}</div>
       <div class="pick"><span class="lbl qual">Bäst kvalitet</span>${i.q ? offerLine(i.q) + (i.why ? `<span class="why">${esc(i.why)}</span>` : "") : `<span class="none">Inget tydligt kvalitetsalternativ. Det billigaste duger.</span>`}</div>`}
     </div>`).join("")}</div>
@@ -675,10 +677,10 @@ $("#dform").addEventListener("submit", async e => {
   e.preventDefault();
   const dish = $("#dname").value.trim();
   if (!sampleFn || !DATA || !dish) return;
-  const now = new Date(), offers = OFFERS.filter(o => DISH_CATS.has(o.c) && status(o, now) !== "old");
+  const now = new Date(), offers = OFFERS.filter(o => DISH_CATS.has(o.c) && status(o, now) === "now");
   dctl = new AbortController();
   $("#dgo").disabled = true; $("#dstop").hidden = false;
-  $("#dstatus").textContent = `Letar efter ingredienserna till ${dish} bland ${offers.length} erbjudanden… (brukar ta 30–90 sekunder)`;
+  $("#dstatus").textContent = `Letar efter ingredienserna till ${dish} bland ${offers.length} erbjudanden som gäller idag… (brukar ta 30–90 sekunder)`;
   try {
     const data = await sampleFn.json(dishPrompt(dish, $("#dserv").value, offers), { signal: dctl.signal, cache: false, onText: () => { $("#dstatus").textContent = "Jämför butikerna…"; } });
     if (!Array.isArray(data?.ingredients) || !data.ingredients.length) throw {code:"invalid_json"};
