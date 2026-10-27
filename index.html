@@ -122,6 +122,36 @@ main{padding-block:18px 60px}
 .steps{margin:0;padding-left:20px;font-size:.88rem;display:flex;flex-direction:column;gap:6px}
 .steps li::marker{font-family:var(--f-mono);color:var(--accent);font-weight:600}
 .recipe .addall{align-self:flex-start}
+.dishform{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.dishform input[type=text]{font:inherit;font-size:1.1rem;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;min-width:0}
+.dhero{display:flex;flex-direction:column;gap:4px;margin:6px 0 14px}
+.dhero h2{font-family:var(--f-display);font-size:1.6rem;margin:0}
+.dhero p{margin:0;color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.tile .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.tile .v{font-family:var(--f-display);font-size:1.35rem;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tile .v i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.tile .s{font-size:.82rem;color:var(--muted)}
+.tile .ghost{align-self:flex-start;font-size:.8rem;padding:6px 10px;margin-top:auto}
+.ingtable{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+.irow{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;grid-template-columns:minmax(140px,1fr) 2fr 2fr;gap:12px;align-items:start}
+@media (max-width:760px){.irow{grid-template-columns:1fr}}
+.irow .iname{font-weight:600}
+.irow .iamt{font-size:.8rem;color:var(--muted)}
+.pick{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:.85rem}
+.pick .lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+.pick .lbl.cheap{color:var(--accent)} .pick .lbl.qual{color:var(--member)}
+.pick .line{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pick .pn{overflow-wrap:anywhere}
+.pick .why{font-size:.78rem;color:var(--muted);font-style:italic}
+.pick .alt{font-size:.75rem;color:var(--muted)}
+.none{font-size:.82rem;color:var(--muted)}
+.cover{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.crow{display:grid;grid-template-columns:120px 1fr auto;gap:10px;align-items:center;font-size:.85rem}
+.cbar{height:10px;border-radius:5px;background:var(--chip);overflow:hidden}
+.cbar span{display:block;height:100%;border-radius:5px}
+.crow .ct{font-family:var(--f-mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 footer{color:var(--muted);font-size:.75rem;padding-block:0 30px}
 @media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}.card:hover{border-color:var(--muted)}}
 </style>
@@ -139,6 +169,7 @@ footer{color:var(--muted);font-size:.75rem;padding-block:0 30px}
     <div class="tabs" role="tablist">
       <button class="tab" type="button" role="tab" id="tab-deals" aria-selected="true">Erbjudanden</button>
       <button class="tab" type="button" role="tab" id="tab-recipes" aria-selected="false">Recept</button>
+      <button class="tab" type="button" role="tab" id="tab-dish" aria-selected="false">Var ska jag handla?</button>
     </div>
     <div id="dealFilters">
     <div class="row" id="stores" aria-label="Butiker"></div>
@@ -190,6 +221,20 @@ footer{color:var(--muted);font-size:.75rem;padding-block:0 30px}
     </div>
   </form>
   <div class="rgrid" id="rout"></div>
+</section>
+
+<section class="wrap" id="dish" hidden style="padding-block:18px 60px">
+  <form class="rform" id="dform">
+    <div class="dishform">
+      <label for="dname" class="tk" style="display:flex;flex-direction:column;gap:4px;flex:1 1 260px;font-size:.78rem;color:var(--muted);font-weight:600">Vad vill du äta?
+        <input type="text" id="dname" placeholder="t.ex. Tuna melt, Lasagne, Pad thai" maxlength="120" required></label>
+      <label for="dserv" style="display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);font-weight:600">Portioner<select id="dserv"><option>1</option><option selected>2</option><option>4</option><option>6</option></select></label>
+      <button class="go" type="submit" id="dgo">Hitta bästa butiken</button>
+      <button class="ghost" type="button" id="dstop" hidden>Stoppa</button>
+    </div>
+    <span class="rstatus" id="dstatus">Skriv en maträtt så jämför jag ingredienserna mot veckans erbjudanden i alla sju butikerna.</span>
+  </form>
+  <div id="dout"></div>
 </section>
 
 <main class="wrap" id="main"><div class="empty">Laddar veckans erbjudanden…</div></main>
@@ -429,12 +474,16 @@ async function boot(){
 const RECIPE_CATS = new Set(["kott","chark","fisk","frukt","gront","mejeri","ost","brod","fryst","fardig","torr"]);
 let sampleFn = null, rctl = null, lastRecipes = store.get("tilbud.recipes", null);
 function setTab(t){
-  const r = t === "recipes";
-  $("#tab-deals").setAttribute("aria-selected", !r); $("#tab-recipes").setAttribute("aria-selected", r);
-  $("#dealFilters").hidden = r; $("#main").hidden = r; $("#recipes").hidden = !r;
-  $(".search").style.visibility = r ? "hidden" : "";
+  const d = t === "deals";
+  $("#tab-deals").setAttribute("aria-selected", d);
+  $("#tab-recipes").setAttribute("aria-selected", t === "recipes");
+  $("#tab-dish").setAttribute("aria-selected", t === "dish");
+  $("#dealFilters").hidden = !d; $("#main").hidden = !d;
+  $("#recipes").hidden = t !== "recipes"; $("#dish").hidden = t !== "dish";
+  $(".search").style.visibility = d ? "" : "hidden";
   st.tab = t; saveUi();
 }
+$("#tab-dish").onclick = () => setTab("dish");
 $("#tab-deals").onclick = () => setTab("deals");
 $("#tab-recipes").onclick = () => setTab("recipes");
 $("#rprefs").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); });
@@ -534,14 +583,122 @@ $("#rform").addEventListener("submit", async e => {
 });
 async function initRecipes(){
   sampleFn = await (window.claude?.use?.("sample") ?? null);
-  if (!sampleFn){ $("#rgo").disabled = true; $("#rstatus").textContent = "Receptfunktionen fungerar bara när appen är öppen i Claude."; }
+  if (!sampleFn){ $("#rgo").disabled = true; $("#dgo").disabled = true; $("#dstatus").textContent = "Funktionen fungerar bara när appen är öppen i Claude."; $("#rstatus").textContent = "Receptfunktionen fungerar bara när appen är öppen i Claude."; }
 }
 function bootRecipes(){
   $("#rstore").innerHTML = Object.entries(DATA.stores).map(([id,s]) => `<option value="${id}">${esc(s.name)} (${recipeOffers(id).length} varor)</option>`).join("") + `<option value="all">Alla butiker</option>`;
   if (lastRecipes?.sid) $("#rstore").value = lastRecipes.sid;
   if (lastRecipes?.data) { renderRecipes(lastRecipes.data); $("#rstatus").textContent = "Senaste förslagen. Tryck på Generera recept för nya."; }
-  if (st.tab === "recipes") setTab("recipes");
+  if (st.tab === "recipes" || st.tab === "dish") setTab(st.tab);
+  if (lastDish?.data) { renderDish(lastDish.data); $("#dname").value = lastDish.dish || ""; $("#dstatus").textContent = "Senaste sökningen. Skriv en ny maträtt för att jämföra igen."; }
 }
+/* ---------- var ska jag handla? ---------- */
+const DISH_CATS = new Set([...RECIPE_CATS, "dryck"]);
+let dctl = null, lastDish = store.get("tilbud.dish", null);
+const byIdAll = () => Object.fromEntries(OFFERS.map(o => [o.id, o]));
+// jämför på jämförpris när båda har samma enhet, annars på styckpris
+function cheaper(a, b){ return (a.up && b.up && a.uu === b.uu) ? a.up - b.up : (a.p ?? 1e9) - (b.p ?? 1e9); }
+function dishPrompt(dish, serv, offers){
+  const lines = offers.map(o => `${o.id}|${DATA.stores[o.s].name}|${o.sv || o.n}|${o.n}|${kr(o.p)} kr${o.up ? ` (${kr(o.up)} kr/${o.uu})` : ""}|${(o.d||"").slice(0,80)}`).join("\n");
+  return `Användaren vill laga maträtten ${JSON.stringify(dish)} för ${serv} portioner och vill veta i vilken butik i Köpenhamn ingredienserna är billigast eller håller bäst kvalitet denna vecka.
+
+Gör så här:
+1. Lista ingredienserna en vanlig version av rätten behöver (svenska namn, metriska mängder för ${serv} portioner). Markera basvaror de flesta har hemma (salt, peppar, olja, kryddor) med "pantry": true.
+2. För varje ingrediens: ange ALLA offer_id i listan nedan som rimligen kan användas som den ingrediensen, oavsett butik ("matches"). Var noggrann: tonfisk på burk matchar inte färsk tonfiskbiff; riven ost matchar ost till gratinering men inte färskost. Hittar du inget, ge en tom lista.
+3. Välj bland matcherna det bästa kvalitetsalternativet ("quality"), utifrån t.ex. ekologiskt, premiummärke, högre köttandel, MSC, lagrad ost eller färskhet. Ge en kort motivering på svenska. Om bara ett lågprisalternativ finns, sätt quality till null.
+4. Ge en kort mening ("summary") om rätten och vad som är viktigast att handla bra.
+
+Svara ENDAST med JSON i exakt denna form:
+{"dish":"Tuna melt","servings":${serv},"summary":"...","ingredients":[{"name":"tonfisk i vatten","amount":"2 burkar (à 185 g)","pantry":false,"matches":["ID1","ID2"],"quality":{"offer_id":"ID2","why":"MSC-märkt, hela bitar i olivolja"}}]}
+
+Veckans erbjudanden (offer_id|butik|svenskt namn|danskt namn|pris|detaljer):
+${lines}`;
+}
+function renderDish(data){
+  const out = $("#dout"), byId = byIdAll(), now = new Date();
+  const ings = (Array.isArray(data?.ingredients) ? data.ingredients : []).map(i => {
+    const m = (Array.isArray(i.matches) ? i.matches : []).map(id => byId[id]).filter(o => o && status(o, now) !== "old").sort(cheaper);
+    const q = i.quality?.offer_id && byId[i.quality.offer_id] ? byId[i.quality.offer_id] : null;
+    return { name: String(i.name || ""), amount: String(i.amount || ""), pantry: !!i.pantry, m, q, why: i.quality?.why || "" };
+  });
+  const need = ings.filter(i => !i.pantry && i.m.length);
+  // per butik: billigaste matchning per ingrediens
+  const per = Object.keys(DATA.stores).map(sid => {
+    const picks = need.map(i => i.m.find(o => o.s === sid)).filter(Boolean);
+    return { sid, n: picks.length, sum: picks.reduce((a,o)=>a+(o.p||0),0), picks };
+  }).sort((a,b) => b.n - a.n || a.sum - b.sum);
+  const one = per[0];
+  const split = need.map(i => i.m[0]);
+  const splitSum = split.reduce((a,o)=>a+(o.p||0),0);
+  const splitStores = [...new Set(split.map(o => o.s))];
+  const qual = need.map(i => i.q).filter(Boolean);
+  const qc = {}; qual.forEach(o => qc[o.s] = (qc[o.s]||0)+1);
+  const qbest = Object.entries(qc).sort((a,b)=>b[1]-a[1])[0];
+  const chip = sid => `<i style="background:${DATA.stores[sid].color}"></i>${esc(DATA.stores[sid].name)}`;
+  const offerLine = o => `<div class="line"><span class="store">${chip(o.s)}</span><span class="tag">${kr(o.p)}<small> kr</small></span>${o.up ? `<span class="unit">${kr(o.up)} kr/${o.uu}</span>` : ""}<button class="add" type="button" data-id="${esc(o.id)}" aria-pressed="${!!LIST[o.id]}">${LIST[o.id] ? "✓ På listan" : "+ Lista"}</button></div>
+      <div class="pn">${esc(o.sv || o.n)}${status(o,now)==="soon" ? ` <span class="b soon">från ${dshort(new Date(o.f))}</span>` : ""}${o.m ? ` <span class="b mem">Medlemspris</span>` : ""}</div>`;
+  const max = Math.max(1, ...per.map(p => p.n));
+  out._sets = { one: one?.picks.map(o=>o.id) || [], split: split.map(o=>o.id), qual: qual.map(o=>o.id) };
+  out.innerHTML = `
+    <div class="dhero"><h2>${esc(data.dish || "")}</h2>${data.summary ? `<p>${esc(data.summary)}</p>` : ""}
+      <p style="font-size:.82rem">${need.length} av ${ings.filter(i=>!i.pantry).length} ingredienser finns på kampanj någonstans den här veckan.</p></div>
+    ${need.length ? `<div class="tiles">
+      <div class="tile"><span class="k">Allt i en butik</span><span class="v">${chip(one.sid)}</span>
+        <span class="s">${one.n} av ${need.length} kampanjvaror · ${kr(one.sum)} kr</span>
+        <button class="ghost" type="button" data-set="one">Lägg i listan</button></div>
+      <div class="tile"><span class="k">Billigast om du delar upp</span><span class="v">${kr(splitSum)} kr</span>
+        <span class="s">${splitStores.map(s => DATA.stores[s].name).join(" + ")}${splitStores.length > 1 && one.n === need.length ? ` · sparar ${kr(one.sum - splitSum)} kr mot en butik` : ""}</span>
+        <button class="ghost" type="button" data-set="split">Lägg i listan</button></div>
+      <div class="tile"><span class="k">Bäst kvalitet</span><span class="v">${qbest ? chip(qbest[0]) : "–"}</span>
+        <span class="s">${qbest ? `${qbest[1]} av ${qual.length} kvalitetsval · ${kr(qual.reduce((a,o)=>a+(o.p||0),0))} kr totalt` : "Inga tydliga kvalitetsalternativ den här veckan"}</span>
+        ${qual.length ? `<button class="ghost" type="button" data-set="qual">Lägg i listan</button>` : ""}</div>
+    </div>
+    <h3 class="tk" style="font-family:var(--f-display);margin:0 0 8px">Så många ingredienser finns i varje butik</h3>
+    <div class="cover">${per.map(p => `<div class="crow"><span class="store">${chip(p.sid)}</span><span class="cbar"><span style="width:${p.n/max*100}%;background:${DATA.stores[p.sid].color}"></span></span><span class="ct">${p.n}/${need.length} · ${kr(p.sum)} kr</span></div>`).join("")}</div>` : ""}
+    <h3 style="font-family:var(--f-display);margin:18px 0 8px">Ingredienser</h3>
+    <div class="ingtable">${ings.map(i => `<div class="irow">
+      <div><div class="iname">${esc(i.name)}</div><div class="iamt">${esc(i.amount)}</div></div>
+      ${i.pantry ? `<div class="none" style="grid-column:2/-1">Basvara, finns oftast hemma.</div>` :
+        !i.m.length ? `<div class="none" style="grid-column:2/-1">Inte på kampanj någonstans den här veckan. Köp där du ändå handlar.</div>` : `
+      <div class="pick"><span class="lbl cheap">Billigast</span>${offerLine(i.m[0])}${i.m.length > 1 ? `<span class="alt">Även i: ${[...new Set(i.m.slice(1).map(o => DATA.stores[o.s].name))].join(", ")}</span>` : ""}</div>
+      <div class="pick"><span class="lbl qual">Bäst kvalitet</span>${i.q ? offerLine(i.q) + (i.why ? `<span class="why">${esc(i.why)}</span>` : "") : `<span class="none">Inget tydligt kvalitetsalternativ. Det billigaste duger.</span>`}</div>`}
+    </div>`).join("")}</div>
+    <p class="rstatus">Kvalitetsvalen är Claudes bedömning utifrån märke och produktbeskrivning. Priserna är kampanjpriser och förpackningsstorlekarna kan skilja sig åt.</p>`;
+}
+$("#dout").addEventListener("click", e => {
+  const a = e.target.closest(".add"); if (a){ const o = OFFERS.find(x=>x.id===a.dataset.id); if (o) toggleItem(o); return; }
+  const b = e.target.closest("[data-set]");
+  if (b){ ($("#dout")._sets?.[b.dataset.set] || []).forEach(id => { if (!LIST[id]) { const o = OFFERS.find(x=>x.id===id); if (o) toggleItem(o); } }); b.textContent = "Tillagt i listan"; }
+});
+$("#dstop").onclick = () => dctl?.abort();
+$("#dform").addEventListener("submit", async e => {
+  e.preventDefault();
+  const dish = $("#dname").value.trim();
+  if (!sampleFn || !DATA || !dish) return;
+  const now = new Date(), offers = OFFERS.filter(o => DISH_CATS.has(o.c) && status(o, now) !== "old");
+  dctl = new AbortController();
+  $("#dgo").disabled = true; $("#dstop").hidden = false;
+  $("#dstatus").textContent = `Letar efter ingredienserna till ${dish} bland ${offers.length} erbjudanden… (brukar ta 30–90 sekunder)`;
+  try {
+    const data = await sampleFn.json(dishPrompt(dish, $("#dserv").value, offers), { signal: dctl.signal, cache: false, onText: () => { $("#dstatus").textContent = "Jämför butikerna…"; } });
+    if (!Array.isArray(data?.ingredients) || !data.ingredients.length) throw {code:"invalid_json"};
+    lastDish = { dish, data, at: Date.now() }; store.set("tilbud.dish", lastDish);
+    renderDish(data);
+    $("#dstatus").textContent = `Klart. Skriv en ny maträtt för att jämföra igen.`;
+  } catch (err) {
+    const c = err?.code;
+    $("#dstatus").textContent =
+      c === "cancelled" ? "Stoppat." :
+      c === "not_granted" || c === "sampling_disabled" || c === "not_declared" ? "Funktionen kräver att du tillåter appen att använda Claude. Ladda om sidan och välj Tillåt." :
+      c === "rate_limited" ? "För många förfrågningar just nu. Vänta en stund och försök igen." :
+      c === "invalid_json" ? "Svaret gick inte att läsa. Försök igen." :
+      "Något gick fel med anslutningen. Försök igen.";
+    if (c === "not_granted" || c === "sampling_disabled" || c === "not_declared") sampleFn = null;
+  } finally {
+    $("#dgo").disabled = !sampleFn; $("#dstop").hidden = true;
+  }
+});
+
 initList();
 initRecipes();
 boot().then(() => DATA && bootRecipes());
