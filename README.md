@@ -30,7 +30,7 @@ Appen visar veckans erbjudanden från butikerna vi handlar i, i Köpenhamn:
 python3 fetch_tilbud.py
 ```
 
-Skriptet kräver Python 3 och Pillow (`pip install pillow`), men ingen API-nyckel. Det laddar ner produktbilderna, friläggs dem från bakgrunden och sparar dem i `images/`. Produktnamn som saknar svensk översättning hamnar i `untranslated.json`. Lägg in dem i `translations.json` och kör skriptet igen.
+Skriptet kräver Python 3 och Pillow (`pip install pillow`), men ingen API-nyckel. Det laddar ner produktbilderna, frilägger dem från bakgrunden och sparar dem i `images/`. Produktnamn som saknar svensk översättning hamnar i `untranslated.json`. Lägg in dem i `translations.json` och kör skriptet igen.
 
 ## Köra appen
 
