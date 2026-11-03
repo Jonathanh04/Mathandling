@@ -255,6 +255,31 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 .pick .pn{font-weight:600;font-size:13px;line-height:18px}
 .pick .pw{font-size:12px;line-height:16px;color:var(--text-muted);font-style:italic}
 
+/* --- Veckomeny --- */
+.seg button{font-size:14px;padding:0 6px}
+.day{background:#fff;border-radius:var(--r-card);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.day summary{list-style:none;display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;min-height:64px}
+.day summary::-webkit-details-marker{display:none}
+.day .dd{width:52px;height:52px;border-radius:16px;background:var(--bg-card);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;line-height:1.1}
+.day .dd b{font-size:16px}
+.day .dd span{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.day .dt{flex:1;min-width:0}
+.day .dt div:first-child{font-weight:700;font-size:15px;line-height:20px}
+.day .dt .sub{font-size:12px;line-height:16px;color:var(--text-muted)}
+.day .chev{color:var(--text-muted);transition:transform 200ms}
+.day[open] .chev{transform:rotate(180deg)}
+.day .rbody{padding:0 16px 16px;display:flex;flex-direction:column;gap:12px}
+.mshop{background:#fff;border-radius:var(--r-card);box-shadow:var(--shadow);padding:16px;margin:18px 0}
+.mshop h3{margin:0 0 4px;font-size:18px}
+.mrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #FBEFE8;font-size:14px}
+.mrow:first-of-type{border-top:0}
+.mrow .mn{flex:1;min-width:0}
+.mrow .mn small{display:block;color:var(--text-muted);font-size:12px;line-height:16px}
+.mstore{margin-top:12px}
+.mstore .schip{background:var(--peach);height:26px;font-size:12px}
+.mtip{border-radius:16px;background:var(--mint);padding:12px 14px;font-size:13px;line-height:19px;display:flex;gap:10px;align-items:flex-start;margin-bottom:14px}
+.mtip svg.lucide{color:var(--success);flex:none;margin-top:1px}
+
 /* --- Inköpslista --- */
 .lgroup{background:#fff;border-radius:var(--r-card);box-shadow:var(--shadow);padding:8px 16px 6px;margin-bottom:14px}
 .lgroup .lh{display:flex;align-items:center;justify-content:space-between;padding:8px 0 6px}
@@ -351,7 +376,8 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
     </header>
     <div class="seg" role="group" aria-label="Välj funktion">
       <button type="button" id="segR" aria-pressed="true">Recept</button>
-      <button type="button" id="segD" aria-pressed="false">Var ska jag handla?</button>
+      <button type="button" id="segM" aria-pressed="false">Veckomeny</button>
+      <button type="button" id="segD" aria-pressed="false">Var handla?</button>
     </div>
 
     <div id="paneR">
@@ -378,6 +404,31 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
         <span class="status" id="rstatus"></span>
       </form>
       <div id="rout"></div>
+    </div>
+
+    <div id="paneM" hidden>
+      <form class="panel" id="mform">
+        <div class="selrow">
+          <label class="field" for="mstore">Butik<select id="mstore"></select></label>
+          <label class="field" for="mcount">Middagar<select id="mcount"><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option></select></label>
+          <label class="field" for="mserv">Portioner<select id="mserv"><option>1</option><option selected>2</option><option>4</option><option>6</option></select></label>
+        </div>
+        <div class="prefs" id="mprefs" role="group" aria-label="Önskemål">
+          <button class="chip plain" type="button" data-p="Minst två vegetariska middagar" aria-pressed="false">Vegetariskt ibland</button>
+          <button class="chip plain" type="button" data-p="Vardagsmiddagar högst 30 minuter" aria-pressed="false">Snabba vardagar</button>
+          <button class="chip plain" type="button" data-p="Barnvänligt" aria-pressed="false">Barnvänligt</button>
+          <button class="chip plain" type="button" data-p="Så billigt som möjligt" aria-pressed="false">Billigt</button>
+          <button class="chip plain" type="button" data-p="Laga dubbelt så att det blir matlåda till lunch" aria-pressed="false">Matlåda</button>
+          <button class="chip plain" type="button" data-p="Proteinrikt" aria-pressed="false">Proteinrikt</button>
+        </div>
+        <label class="field" for="mwish">Egna önskemål<input type="text" id="mwish" placeholder="t.ex. fisk en gång, ingen svamp, tacos på fredag"></label>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn press" type="submit" id="mgo"><i data-lucide="calendar-days"></i>Planera veckan</button>
+          <button class="ghostbtn" type="button" id="mstop" hidden>Stoppa</button>
+        </div>
+        <span class="status" id="mstatus">Bygger en meny på dagens erbjudanden, med ingredienser som återanvänds så att mindre blir över.</span>
+      </form>
+      <div id="mout"></div>
     </div>
 
     <div id="paneD" hidden>
@@ -553,6 +604,12 @@ async function initShared(){
       LIST = {}; snap.docs.forEach(d => { LIST[d.id] = d.data(); });
       afterList();
     }, () => { dbList = null; $("#syncNote").textContent = "Delningen är inte tillgänglig just nu. Listan sparas i den här webbläsaren."; });
+    menuDoc = db.doc("meny/aktuell");
+    menuDoc.onSnapshot(snap => {
+      if (!snap.exists) return;
+      const m = snap.data();
+      if (m?.data && (!lastMenu || (m.at || 0) > (lastMenu.at || 0))) { lastMenu = m; store.set("vt.menu", m); if (DATA) renderMenu(m); }
+    }, () => { menuDoc = null; });
     const uid = user ? await user.id() : null;
     if (uid) {
       favDoc = db.doc(`data/users/${uid}/favs`);
@@ -810,16 +867,16 @@ function renderList(){
   const by = {}; items.forEach(([id, i]) => (by[i.s] ??= []).push([id, i]));
   let tot = 0, totSave = 0;
   out.innerHTML = Object.entries(by).map(([sid, arr]) => {
-    const s = DATA?.stores[sid] || { name: sid, color: "#ccc" };
+    const s = sid === "_x" ? { name: "Utöver kampanjerna", color: "#C7C7CC" } : (DATA?.stores[sid] || { name: sid, color: "#ccc" });
     arr.sort((a, b) => a[1].done - b[1].done || (a[1].c || "").localeCompare(b[1].c || ""));
     const sum = arr.filter(([, i]) => !i.done).reduce((a, [, i]) => a + (i.p || 0) * (i.q || 1), 0); tot += sum;
     return `<div class="lgroup"><div class="lh"><span class="schip"><i style="background:${s.color}"></i>${esc(s.name)}</span><span class="price" style="font-weight:600">${esc(kr(sum))}</span></div>
       ${arr.map(([id, i]) => { const o = BYID[id]; return `<div class="li ${i.done ? "done" : ""}">
         <button class="chk" type="button" data-chk="${esc(id)}" aria-pressed="${!!i.done}" aria-label="Bocka av ${esc(i.n)}">${icon("check")}</button>
         <div class="lt" ${o ? `data-open="${esc(id)}"` : ""}>${o ? imgTag(o) : ""}<span class="ph">${icon(CATICON[i.c] || "package")}</span></div>
-        <div class="ln">${esc(i.n)}${i.da && i.da !== i.n ? `<small>${esc(i.da)}</small>` : ""}${!o || status(o) === "old" ? `<small style="color:var(--primary-ink);font-style:normal">Erbjudandet har gått ut</small>` : ""}</div>
+        <div class="ln">${esc(i.n)}${i.da && i.da !== i.n ? `<small>${esc(i.da)}</small>` : ""}${i.amt ? `<small style="font-style:normal">${esc(i.amt)}</small>` : ""}${!i.x && (!o || status(o) === "old") ? `<small style="color:var(--primary-ink);font-style:normal">Erbjudandet har gått ut</small>` : ""}</div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-          <span class="lp price">${esc(kr((i.p || 0) * (i.q || 1)))}</span>
+          <span class="lp price">${i.x ? "–" : esc(kr((i.p || 0) * (i.q || 1)))}</span>
           <div class="stepper sm" role="group" aria-label="Antal"><button type="button" data-qm="${esc(id)}" aria-label="Färre">${icon(i.q > 1 ? "minus" : "trash-2")}</button><span>${i.q || 1}</span><button type="button" class="plus" data-qp="${esc(id)}" aria-label="Fler">${icon("plus")}</button></div>
         </div></div>`; }).join("")}</div>`;
   }).join("") + `<div class="ltotal"><div class="sum"><span class="muted">Kvar att köpa</span><b class="price">${esc(kr(tot))}</b></div>${icon("receipt", ' style="color:var(--primary);width:28px;height:28px"')}</div>
@@ -828,7 +885,7 @@ function renderList(){
   $("#lCopy").onclick = async () => {
     const lines = [];
     Object.entries(by).forEach(([sid, arr]) => { const rest = arr.filter(([, i]) => !i.done); if (!rest.length) return;
-      lines.push((DATA?.stores[sid]?.name || sid).toUpperCase()); rest.forEach(([, i]) => lines.push(`- ${i.q > 1 ? i.q + " × " : ""}${i.n}${i.da && i.da !== i.n ? ` [${i.da}]` : ""} (${kr((i.p||0)*(i.q||1))})`)); lines.push(""); });
+      lines.push((sid === "_x" ? "Utöver kampanjerna" : (DATA?.stores[sid]?.name || sid)).toUpperCase()); rest.forEach(([, i]) => lines.push(`- ${i.q > 1 ? i.q + " × " : ""}${i.n}${i.da && i.da !== i.n ? ` [${i.da}]` : ""} (${i.x ? (i.amt || "utöver kampanj") : kr((i.p||0)*(i.q||1))})`)); lines.push(""); });
     try { await navigator.clipboard.writeText(lines.join("\n").trim()); toast("Listan kopierades"); } catch { toast("Kunde inte kopiera. Markera texten manuellt."); }
   };
   $("#lClear").onclick = () => { Object.entries(LIST).filter(([, i]) => i.done).forEach(([id]) => { delete LIST[id]; writeItem(id); }); afterList(); };
@@ -851,7 +908,10 @@ const RECIPE_CATS = new Set(["kott","chark","fisk","frukt","gront","mejeri","ost
 const DISH_CATS = new Set([...RECIPE_CATS, "dryck"]);
 let sampleFn = null, rctl = null, dctl = null;
 let lastRecipes = store.get("vt.recipes", store.get("tilbud.recipes", null)), lastDish = store.get("vt.dish", store.get("tilbud.dish", null));
-function setCook(t){ st.cook = t; saveUi(); $("#segR").setAttribute("aria-pressed", t === "r"); $("#segD").setAttribute("aria-pressed", t === "d"); $("#paneR").hidden = t !== "r"; $("#paneD").hidden = t !== "d"; }
+function setCook(t){ st.cook = t; saveUi();
+  [["r","#segR","#paneR"],["m","#segM","#paneM"],["d","#segD","#paneD"]].forEach(([k, b, p]) => { $(b).setAttribute("aria-pressed", t === k); $(p).hidden = t !== k; }); }
+$("#segM").onclick = () => setCook("m");
+$("#mprefs").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); });
 $("#segR").onclick = () => setCook("r"); $("#segD").onclick = () => setCook("d");
 $("#rprefs").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); });
 const errText = c =>
@@ -996,9 +1056,110 @@ $("#dform").addEventListener("submit", async e => {
     $("#dstatus").textContent = errText(err?.code); if (["not_granted","sampling_disabled","not_declared"].includes(err?.code)) sampleFn = null;
   } finally { $("#dgo").disabled = !sampleFn; $("#dstop").hidden = true; }
 });
+/* ---------- veckomeny ---------- */
+let menuDoc = null, mctl = null, lastMenu = store.get("vt.menu", null);
+const PANTRY = /^(salt|peppar|svartpeppar|olja|olivolja|rapsolja|smör|vatten|socker|vetemjöl|mjöl)$/i;
+function menuOffers(sid){ const now = new Date(); return OFFERS.filter(o => RECIPE_CATS.has(o.c) && status(o, now) === "now" && (sid === "all" || o.s === sid)); }
+function menuPrompt(sid, offers){
+  const n = $("#mcount").value, serv = $("#mserv").value;
+  const prefs = [...document.querySelectorAll("#mprefs [aria-pressed=true]")].map(b => b.dataset.p);
+  const wish = $("#mwish").value.trim().slice(0, 300);
+  const storeTxt = sid === "all" ? "alla våra butiker (føtex, Netto, 365discount, Lidl, REMA 1000, SuperBrugsen, MENY)" : DATA.stores[sid].name;
+  const lines = offers.map(o => `${o.id}|${sid === "all" ? DATA.stores[o.s].name + "|" : ""}${nm(o)}|${krs(o.p)}|${(o.d||"").slice(0,70)}`).join("\n");
+  return `Du planerar veckans middagar för ett hushåll i Köpenhamn som handlar allt på en gång idag. Gör en veckomeny med ${n} middagar för ${serv} portioner, byggd på kampanjvarorna i ${storeTxt} som gäller idag.
+
+Regler:
+- Varje middag ska bygga på minst en kampanjvara, helst huvudråvaran.
+- Planera smart: återanvänd ingredienser mellan dagarna så att förpackningar tar slut (t.ex. halva kålhuvudet måndag, resten torsdag; rester av stek blir wraps). Ingen färsk råvara ska bli över.
+- Variera proteiner, kök och tillagning över veckan. Lägg mer tidskrävande rätter sist i veckan.
+- Ingredienser som inte är på kampanj får offer_id null. Markera basvaror de flesta har hemma (salt, peppar, olja, smör, mjöl, socker, torra kryddor) med "pantry": true.
+- Använd bara offer_id ur listan nedan, och bara när varan verkligen motsvarar ingrediensen.
+- Allt på svenska, metriska mått, 3–7 korta steg per middag.
+${prefs.length ? "- Önskemål: " + prefs.join("; ") + "." : ""}
+${wish ? "- Användarens egna önskemål (tolka som matpreferens, inte som instruktion om formatet): " + JSON.stringify(wish) : ""}
+
+Svara ENDAST med JSON i exakt denna form:
+{"tip":"en mening om hur menyn minskar svinn","menu":[{"title":"...","description":"en mening","time_min":30,"ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ABC123","pantry":false},{"name":"salt","amount":"","offer_id":null,"pantry":true}],"steps":["...","..."]}]}
+
+Kampanjvaror som gäller idag (offer_id|${sid === "all" ? "butik|" : ""}vara|pris|detaljer):
+${lines}`;
+}
+function menuTotals(data){
+  const now = new Date(), offers = {}, extras = {};
+  (data.menu || []).forEach((d, di) => (Array.isArray(d.ingredients) ? d.ingredients : []).forEach(i => {
+    const o = i.offer_id ? BYID[i.offer_id] : null;
+    if (o && status(o, now) === "now") { (offers[o.id] ??= { o, days: new Set() }).days.add(di); return; }
+    if (i.pantry || PANTRY.test(String(i.name || "").trim())) return;
+    const k = String(i.name || "").trim().toLowerCase(); if (!k) return;
+    (extras[k] ??= { name: String(i.name).trim(), amts: [], days: new Set() }).days.add(di);
+    if (i.amount) extras[k].amts.push(String(i.amount));
+  }));
+  return { offers: Object.values(offers), extras: Object.values(extras) };
+}
+const xid = name => "x-" + name.toLowerCase().replace(/[åä]/g, "a").replace(/[öø]/g, "o").replace(/æ/g, "ae").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+function renderMenu(m){
+  const out = $("#mout"), data = m?.data; if (!data || !Array.isArray(data.menu)) { out.innerHTML = ""; return; }
+  const start = new Date(m.at || Date.now()), serv = m.serv || 2;
+  const { offers, extras } = menuTotals(data);
+  const cost = offers.reduce((a, x) => a + (x.o.p || 0), 0);
+  const byStore = {}; offers.forEach(x => (byStore[x.o.s] ??= []).push(x));
+  const dayName = i => { const d = new Date(start); d.setDate(d.getDate() + i); return d; };
+  out._menu = { offers: offers.map(x => x.o.id), extras };
+  out.innerHTML = `
+    <div class="tiles" style="grid-template-columns:1fr 1fr">
+      <div class="tile" style="--bg-card:var(--peach);flex-direction:column;align-items:flex-start;gap:2px"><div class="k">Kampanjvaror</div><div class="v price">${esc(krs(cost))}</div><div class="s">${offers.length} varor · ca ${esc(krs(cost / Math.max(1, data.menu.length * serv)))}/portion</div></div>
+      <div class="tile" style="--bg-card:var(--mint);flex-direction:column;align-items:flex-start;gap:2px"><div class="k">Veckan</div><div class="v">${data.menu.length} middagar</div><div class="s">${serv} portioner · ${extras.length} varor utöver kampanj</div></div>
+    </div>
+    ${data.tip ? `<div class="mtip">${icon("leaf")}<span>${esc(data.tip)}</span></div>` : ""}
+    <button class="btn press" type="button" id="mAddAll" style="width:100%;height:52px;margin-bottom:18px">${icon("shopping-bag")}Lägg hela veckans handling på listan</button>
+    ${data.menu.map((d, di) => { const dd = dayName(di); const ings = (Array.isArray(d.ingredients) ? d.ingredients : []).map(i => ({ ...i, o: i.offer_id && BYID[i.offer_id] && status(BYID[i.offer_id]) === "now" ? BYID[i.offer_id] : null }));
+      const deals = ings.filter(i => i.o).length;
+      return `<details class="day" ${di === 0 ? "open" : ""}><summary>
+        <span class="dd" style="--bg-card:${PASTELS[di % 4]}"><span>${DAYS[dd.getDay()].slice(0,3)}</span><b>${dd.getDate()}/${dd.getMonth()+1}</b></span>
+        <span class="dt"><div>${esc(d.title)}</div><div class="sub">${d.time_min ? `${esc(d.time_min)} min · ` : ""}${deals} kampanjvaror</div></span>${icon("chevron-down", ' class="chev"')}</summary>
+        <div class="rbody">${d.description ? `<p class="dtext" style="margin:0">${esc(d.description)}</p>` : ""}
+          <h4 style="margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Ingredienser</h4>
+          <ul class="ing">${ings.map(i => `<li><div class="in"><div>${esc(i.name)}</div><div class="sub">${esc(i.amount || "")}${i.pantry ? " · finns oftast hemma" : ""}</div>${i.o ? `<div class="deal">${storeChip(i.o.s)}<span>${esc(kr(i.o.p))}</span></div>` : ""}</div>
+            ${i.o ? `<button class="plusbtn" type="button" data-add="${esc(i.o.id)}" aria-pressed="${!!LIST[i.o.id]}" aria-label="Lägg på inköpslistan">${icon("plus")}</button>` : ""}</li>`).join("")}</ul>
+          <h4 style="margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Gör så här</h4>
+          <ol class="steps">${(Array.isArray(d.steps) ? d.steps : []).map(x => `<li>${esc(x)}</li>`).join("")}</ol></div></details>`; }).join("")}
+    <div class="mshop"><h3>Veckans handling</h3><p class="status" style="margin:0">Kampanjvaror per butik och det du behöver utöver dem.</p>
+      ${Object.entries(byStore).map(([sid, arr]) => `<div class="mstore">${storeChip(sid)}
+        ${arr.map(x => `<div class="mrow"><span class="mn">${esc(nm(x.o))}<small>${[...x.days].map(i => DAYS[dayName(i).getDay()].slice(0,3)).join(", ")}</small></span><b class="price" style="font-size:13px">${esc(kr(x.o.p))}</b>
+          <button class="plusbtn" type="button" data-add="${esc(x.o.id)}" aria-pressed="${!!LIST[x.o.id]}" aria-label="Lägg på inköpslistan">${icon("plus")}</button></div>`).join("")}</div>`).join("")}
+      ${extras.length ? `<div class="mstore"><span class="schip" style="background:#F2F2F7">Utöver kampanjerna</span>
+        ${extras.map(x => `<div class="mrow"><span class="mn">${esc(x.name)}<small>${esc(x.amts.slice(0, 3).join(" + "))}</small></span></div>`).join("")}</div>` : ""}
+    </div>
+    <p class="foot">Planerad ${esc(dshort(start))} med erbjudanden som gällde den dagen. Menyn delas med alla som har appen.</p>`;
+  icons();
+  $("#mAddAll").onclick = () => {
+    let n = 0;
+    out._menu.offers.forEach(id => { if (!LIST[id] && BYID[id]) { LIST[id] = itemFrom(BYID[id]); writeItem(id); n++; } });
+    out._menu.extras.forEach(x => { const id = xid(x.name); if (!LIST[id]) { LIST[id] = { n: x.name, s: "_x", x: 1, p: 0, q: 1, amt: x.amts.slice(0, 3).join(" + "), done: false, at: Date.now() }; writeItem(id); n++; } });
+    afterList(); toast(`${n} varor lades på listan`); $("#mAddAll").innerHTML = `${icon("check")}Veckans handling ligger på listan`; icons();
+  };
+}
+$("#mstop").onclick = () => mctl?.abort();
+$("#mform").addEventListener("submit", async e => {
+  e.preventDefault(); if (!sampleFn || !DATA) return;
+  const sid = $("#mstore").value, offers = menuOffers(sid);
+  if (offers.length < 5) { $("#mstatus").textContent = "För få kampanjvaror som gäller idag i den här butiken. Välj en annan eller Alla butiker."; return; }
+  mctl = new AbortController(); $("#mgo").disabled = true; $("#mstop").hidden = false;
+  $("#mstatus").textContent = `Planerar ${$("#mcount").value} middagar med ${offers.length} kampanjvaror … (30–90 sekunder)`;
+  try {
+    const data = await sampleFn.json(menuPrompt(sid, offers), { signal: mctl.signal, cache: false, onText: () => { $("#mstatus").textContent = "Skriver menyn …"; } });
+    if (!Array.isArray(data?.menu) || !data.menu.length) throw { code: "invalid_json" };
+    lastMenu = { sid, serv: +$("#mserv").value, data, at: Date.now() }; store.set("vt.menu", lastMenu);
+    if (menuDoc) { try { await menuDoc.set(lastMenu); } catch {} }
+    renderMenu(lastMenu); $("#mstatus").textContent = `Veckomeny med ${data.menu.length} middagar från ${sid === "all" ? "alla butiker" : DATA.stores[sid].name}.`;
+  } catch (err) {
+    $("#mstatus").textContent = errText(err?.code); if (["not_granted","sampling_disabled","not_declared"].includes(err?.code)) sampleFn = null;
+  } finally { $("#mgo").disabled = !sampleFn; $("#mstop").hidden = true; }
+});
+
 async function initSample(){
   sampleFn = await (window.claude?.use?.("sample") ?? null);
-  if (!sampleFn) { $("#rgo").disabled = $("#dgo").disabled = true; $("#rstatus").textContent = $("#dstatus").textContent = "Den här funktionen fungerar när appen är öppen i Claude."; }
+  if (!sampleFn) { $("#rgo").disabled = $("#dgo").disabled = $("#mgo").disabled = true; $("#rstatus").textContent = $("#dstatus").textContent = $("#mstatus").textContent = "Den här funktionen fungerar när appen är öppen i Claude."; }
 }
 
 /* ================= start ================= */
@@ -1017,6 +1178,9 @@ async function boot(){
   $("#rstore").innerHTML = Object.entries(DATA.stores).map(([id, s]) => `<option value="${id}">${esc(s.name)} (${recipeOffers(id).length})</option>`).join("") + `<option value="all">Alla butiker</option>`;
   if (lastRecipes?.sid) $("#rstore").value = lastRecipes.sid;
   if (lastRecipes?.data) renderRecipes(lastRecipes.data);
+  $("#mstore").innerHTML = Object.entries(DATA.stores).map(([id, s]) => `<option value="${id}">${esc(s.name)} (${menuOffers(id).length})</option>`).join("") + `<option value="all">Alla butiker</option>`;
+  if (lastMenu?.sid) $("#mstore").value = lastMenu.sid;
+  if (lastMenu?.data) renderMenu(lastMenu);
   if (lastDish?.data) { $("#dname").value = lastDish.dish || ""; renderDish(lastDish.data); $("#dstatus").textContent = "Senaste sökningen. Skriv en ny maträtt för att jämföra igen."; }
   setCook(st.cook || "r");
   updateBadges();

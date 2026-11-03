@@ -12,6 +12,7 @@ Appen visar veckans erbjudanden från butikerna vi handlar i, i Köpenhamn:
 - **Filter och sortering**: butik, "gäller nu" eller "kommande", rabatt, pris och jämförpris (kr/kg, kr/l). Medlemspriser och köpbegränsningar är markerade.
 - **Receptgenerator**: väljer recept utifrån kampanjvarorna i en butik (eller alla butiker), med önskemål som vegetariskt, snabbt eller barnvänligt. Ingredienser som är på kampanj visas med pris och kan läggas i inköpslistan.
 - **Var ska jag handla?**: skriv en maträtt, t.ex. "Tuna melt", så visas för varje ingrediens var den är billigast och var kvaliteten är bäst den här veckan. Appen räknar ut bästa butiken för hela handlingen, hur mycket du sparar på att dela upp den och var kvaliteten är bäst.
+- **Veckomeny**: planerar 3–7 middagar på dagens erbjudanden, återanvänder ingredienser mellan dagarna och lägger hela veckans handling på listan med ett tryck. Menyn delas med hushållet.
 - **Delad inköpslista**, grupperad per butik och med en summa.
 
 ## Filer
