@@ -255,6 +255,19 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 .pick .pn{font-weight:600;font-size:13px;line-height:18px}
 .pick .pw{font-size:12px;line-height:16px;color:var(--text-muted);font-style:italic}
 
+/* --- bild i Var handla? --- */
+.photo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.photo input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.photobtn{height:44px;padding:0 16px;border-radius:var(--r-pill);border:1.5px dashed var(--line);background:var(--bg);color:var(--primary-ink);font-weight:600;display:inline-flex;align-items:center;gap:8px}
+.photobtn.drag{border-color:var(--primary);background:var(--primary-soft)}
+.pthumb{position:relative;width:72px;height:72px;border-radius:18px;overflow:hidden;box-shadow:var(--shadow);flex:none}
+.pthumb img{width:100%;height:100%;object-fit:cover}
+.pthumb button{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;background:rgba(28,28,30,.65);color:#fff;display:grid;place-items:center}
+.pthumb button::after{content:"";position:absolute;inset:-8px}
+.pthumb button svg.lucide{width:14px;height:14px}
+.dishhead{display:flex;gap:14px;align-items:center;margin-bottom:16px}
+.dishhead img{width:72px;height:72px;border-radius:18px;object-fit:cover;box-shadow:var(--shadow);flex:none}
+
 /* --- Veckomeny --- */
 .seg button{font-size:14px;padding:0 6px}
 .day{background:#fff;border-radius:var(--r-card);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
@@ -433,7 +446,13 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 
     <div id="paneD" hidden>
       <form class="panel" id="dform">
-        <label class="field" for="dname">Vad vill du äta?<input type="text" id="dname" placeholder="t.ex. Tuna melt, lasagne, pad thai" maxlength="120" required></label>
+        <label class="field" for="dname">Vad vill du äta?<input type="text" id="dname" placeholder="t.ex. Tuna melt, eller beskriv bilden" maxlength="160"></label>
+        <div class="photo" id="dphoto" hidden>
+          <input type="file" id="dfile" accept="image/jpeg,image/png,image/webp,image/gif">
+          <label class="photobtn press" for="dfile" id="dfileBtn"><i data-lucide="camera"></i>Bifoga bild</label>
+          <div class="pthumb" id="dthumb" hidden><img id="dthumbImg" alt="Bifogad bild"><button type="button" id="dclear" aria-label="Ta bort bilden"><i data-lucide="x"></i></button></div>
+          <span class="status" id="dphotoHint">Ett foto eller en skärmdump av rätten. Du kan också klistra in eller dra hit en bild.</span>
+        </div>
         <div class="selrow">
           <label class="field" for="dserv">Portioner<select id="dserv"><option>1</option><option selected>2</option><option>4</option><option>6</option></select></label>
         </div>
@@ -919,7 +938,10 @@ const errText = c =>
   ["not_granted","sampling_disabled","not_declared"].includes(c) ? "Funktionen kräver att du tillåter appen att använda Claude. Ladda om och välj Tillåt." :
   c === "rate_limited" ? "För många förfrågningar just nu. Vänta en stund och försök igen." :
   c === "invalid_json" ? "Svaret gick inte att läsa. Försök igen." :
-  c === "prompt_too_large" ? "För många varor att skicka. Välj en enskild butik." : "Något gick fel med anslutningen. Försök igen.";
+  c === "prompt_too_large" ? "För många varor att skicka. Välj en enskild butik." :
+  c === "image_rejected" ? "Bilden gick inte att läsa. Prova en annan bild (JPEG, PNG eller WebP)." :
+  c === "images_unavailable" ? "Bilder stöds inte här. Skriv vad du vill äta i stället." :
+  c === "refused" ? "Claude kunde inte hjälpa till med det här. Prova en annan bild eller text." : "Något gick fel med anslutningen. Försök igen.";
 
 function recipeOffers(sid){ const now = new Date(); return OFFERS.filter(o => RECIPE_CATS.has(o.c) && status(o, now) !== "old" && (sid === "all" || o.s === sid)); }
 function recipePrompt(sid, offers){
@@ -987,9 +1009,12 @@ $("#rform").addEventListener("submit", async e => {
 
 // jämför på jämförpris när båda har samma enhet, annars på styckpris
 function cheaper(a, b){ return (a.up && b.up && a.uu === b.uu) ? a.up - b.up : (a.p ?? 1e9) - (b.p ?? 1e9); }
-function dishPrompt(dish, serv, offers){
+function dishPrompt(dish, serv, offers, hasImage){
   const lines = offers.map(o => `${o.id}|${DATA.stores[o.s].name}|${nm(o)}|${o.n}|${krs(o.p)}${o.up ? ` (${krs(o.up)}/${o.uu})` : ""}|${(o.d||"").slice(0,80)}`).join("\n");
-  return `Användaren vill laga maträtten ${JSON.stringify(dish)} för ${serv} portioner och vill veta i vilken butik i Köpenhamn ingredienserna är billigast eller håller bäst kvalitet idag. Listan nedan innehåller bara erbjudanden som gäller idag; använd inga andra.
+  const what = hasImage
+    ? `maträtten på den bifogade bilden${dish ? ` (användarens kommentar, tolka som matpreferens: ${JSON.stringify(dish)})` : ""}. Identifiera först rätten på bilden och sätt "dish" till dess namn på svenska. Om bilden inte visar mat, sätt "dish" till "Ingen maträtt hittades" och lämna "ingredients" tom`
+    : `maträtten ${JSON.stringify(dish)}`;
+  return `Användaren vill laga ${what}, för ${serv} portioner, och vill veta i vilken butik i Köpenhamn ingredienserna är billigast eller håller bäst kvalitet idag. Listan nedan innehåller bara erbjudanden som gäller idag; använd inga andra.
 
 Gör så här:
 1. Lista ingredienserna en vanlig version av rätten behöver (svenska namn, metriska mängder för ${serv} portioner). Markera basvaror de flesta har hemma (salt, peppar, olja, kryddor) med "pantry": true.
@@ -1003,7 +1028,7 @@ Svara ENDAST med JSON i exakt denna form:
 Erbjudanden som gäller idag (offer_id|butik|svenskt namn|danskt namn|pris|detaljer):
 ${lines}`;
 }
-function renderDish(data){
+function renderDish(data, thumb){
   const out = $("#dout"), now = new Date();
   const ings = (Array.isArray(data?.ingredients) ? data.ingredients : []).map(i => {
     // Endast kampanjvaror som gäller idag, aldrig kommande eller utgångna
@@ -1023,7 +1048,7 @@ function renderDish(data){
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:2px">${storeChip(o.s)}<b class="price" style="font-size:13px">${esc(kr(o.p))}</b>${o.up ? `<span class="muted" style="font-size:12px">${esc(krs(o.up))}/${o.uu}</span>` : ""}<span class="muted" style="font-size:12px">t.o.m. ${esc(dlong(new Date(o.t)))}</span></div>
       ${why ? `<div class="pw">${esc(why)}</div>` : ""}</div>
       <button class="plusbtn" type="button" data-add="${esc(o.id)}" aria-pressed="${!!LIST[o.id]}" aria-label="Lägg på inköpslistan">${icon("plus")}</button></div>`;
-  out.innerHTML = `<div style="margin-bottom:16px"><h2 class="t-screen">${esc(data.dish || "")}</h2>${data.summary ? `<p class="dtext">${esc(data.summary)}</p>` : ""}
+  out.innerHTML = `<div class="dishhead">${thumb && /^data:image\/jpeg;base64,/.test(thumb) ? `<img src="${thumb}" alt="">` : ""}<div style="min-width:0"><h2 class="t-screen">${esc(data.dish || "")}</h2>${data.summary ? `<p class="dtext">${esc(data.summary)}</p>` : ""}</div></div><div style="margin:-6px 0 16px">
       <p class="status" style="margin-top:4px">${need.length} av ${ings.filter(i => !i.pantry).length} ingredienser är på kampanj idag (${dshort(now)}).</p></div>
     ${need.length ? `<div class="tiles">
       <div class="tile" style="--bg-card:var(--peach)"><span class="ti">${icon("store")}</span><div class="tt"><div class="k">Allt i en butik</div><div class="v">${esc(DATA.stores[one.sid].name)}</div><div class="s">${one.n} av ${need.length} varor · ${esc(krs(one.sum))}</div></div><button class="ghostbtn" type="button" data-set="one">Lägg till</button></div>
@@ -1042,16 +1067,43 @@ function renderDish(data){
 }
 $("#dout").addEventListener("click", e => { const b = e.target.closest("[data-set]"); if (b) addSet($("#dout")._sets?.[b.dataset.set] || [], b); });
 $("#dstop").onclick = () => dctl?.abort();
+/* bild till "Var handla?" */
+let dImage = null, dThumb = null, imgLimits = null;
+function thumbOf(file){ return new Promise(res => { const u = URL.createObjectURL(file), im = new Image();
+  im.onload = () => { const c = document.createElement("canvas"), k = Math.min(1, 160 / Math.max(im.width, im.height)); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+    c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(u); try { res(c.toDataURL("image/jpeg", .8)); } catch { res(null); } };
+  im.onerror = () => { URL.revokeObjectURL(u); res(null); }; im.src = u; }); }
+async function setDishImage(file){
+  if (!file) return;
+  const types = imgLimits?.mediaTypes || ["image/jpeg","image/png","image/webp","image/gif"];
+  if (!types.includes(file.type)) { $("#dstatus").textContent = "Bilden måste vara JPEG, PNG, WebP eller GIF."; return; }
+  if (imgLimits?.maxInputBytes && file.size > imgLimits.maxInputBytes) { $("#dstatus").textContent = `Bilden är för stor (max ${Math.round(imgLimits.maxInputBytes / 1e6)} MB).`; return; }
+  dImage = file; dThumb = await thumbOf(file);
+  $("#dthumbImg").src = dThumb || URL.createObjectURL(file); $("#dthumb").hidden = false; $("#dfileBtn").lastChild.textContent = "Byt bild";
+  $("#dphotoHint").textContent = "Claude känner igen rätten på bilden. Skriv gärna till något, t.ex. \"men vegetariskt\".";
+}
+function clearDishImage(){ dImage = null; dThumb = null; $("#dfile").value = ""; $("#dthumb").hidden = true; $("#dfileBtn").lastChild.textContent = "Bifoga bild";
+  $("#dphotoHint").textContent = "Ett foto eller en skärmdump av rätten. Du kan också klistra in eller dra hit en bild."; }
+$("#dfile").addEventListener("change", e => setDishImage(e.target.files?.[0]));
+$("#dclear").onclick = clearDishImage;
+$("#dform").addEventListener("paste", e => { if ($("#dphoto").hidden) return; const f = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith("image/")); if (f) { e.preventDefault(); setDishImage(f); } });
+["dragenter","dragover"].forEach(t => $("#dform").addEventListener(t, e => { if ($("#dphoto").hidden) return; e.preventDefault(); $("#dfileBtn").classList.add("drag"); }));
+["dragleave","drop"].forEach(t => $("#dform").addEventListener(t, e => { $("#dfileBtn").classList.remove("drag"); if (t === "drop" && !$("#dphoto").hidden) { e.preventDefault(); setDishImage(e.dataTransfer?.files?.[0]); } }));
+
 $("#dform").addEventListener("submit", async e => {
-  e.preventDefault(); const dish = $("#dname").value.trim(); if (!sampleFn || !DATA || !dish) return;
+  e.preventDefault(); const text = $("#dname").value.trim(); if (!sampleFn || !DATA) return;
+  if (!text && !dImage) { $("#dstatus").textContent = "Skriv vad du vill äta eller bifoga en bild."; $("#dname").focus(); return; }
   const now = new Date(), offers = OFFERS.filter(o => DISH_CATS.has(o.c) && status(o, now) === "now");
   dctl = new AbortController(); $("#dgo").disabled = true; $("#dstop").hidden = false;
-  $("#dstatus").textContent = `Letar efter ingredienserna till ${dish} bland ${offers.length} erbjudanden som gäller idag … (30–90 sekunder)`;
+  const label = text || "rätten på bilden";
+  $("#dstatus").textContent = `${dImage ? "Tittar på bilden och letar" : "Letar"} efter ingredienserna till ${label} bland ${offers.length} erbjudanden som gäller idag … (30–90 sekunder)`;
   try {
-    const data = await sampleFn.json(dishPrompt(dish, $("#dserv").value, offers), { signal: dctl.signal, cache: false, onText: () => { $("#dstatus").textContent = "Jämför butikerna …"; } });
+    const opts = { signal: dctl.signal, cache: false, onText: () => { $("#dstatus").textContent = "Jämför butikerna …"; } };
+    if (dImage) opts.images = [dImage];
+    const data = await sampleFn.json(dishPrompt(text, $("#dserv").value, offers, !!dImage), opts);
     if (!Array.isArray(data?.ingredients) || !data.ingredients.length) throw { code: "invalid_json" };
-    lastDish = { dish, data, at: Date.now() }; store.set("vt.dish", lastDish);
-    renderDish(data); $("#dstatus").textContent = "Klart. Skriv en ny maträtt för att jämföra igen.";
+    lastDish = { dish: text, data, thumb: dThumb, at: Date.now() }; store.set("vt.dish", lastDish);
+    renderDish(data, dThumb); $("#dstatus").textContent = "Klart. Skriv en ny maträtt eller bifoga en ny bild för att jämföra igen.";
   } catch (err) {
     $("#dstatus").textContent = errText(err?.code); if (["not_granted","sampling_disabled","not_declared"].includes(err?.code)) sampleFn = null;
   } finally { $("#dgo").disabled = !sampleFn; $("#dstop").hidden = true; }
@@ -1159,6 +1211,7 @@ $("#mform").addEventListener("submit", async e => {
 
 async function initSample(){
   sampleFn = await (window.claude?.use?.("sample") ?? null);
+  if (sampleFn) { try { imgLimits = (await sampleFn.limits())?.images || null; } catch { imgLimits = null; } $("#dphoto").hidden = !imgLimits; icons(); }
   if (!sampleFn) { $("#rgo").disabled = $("#dgo").disabled = $("#mgo").disabled = true; $("#rstatus").textContent = $("#dstatus").textContent = $("#mstatus").textContent = "Den här funktionen fungerar när appen är öppen i Claude."; }
 }
 
@@ -1181,7 +1234,7 @@ async function boot(){
   $("#mstore").innerHTML = Object.entries(DATA.stores).map(([id, s]) => `<option value="${id}">${esc(s.name)} (${menuOffers(id).length})</option>`).join("") + `<option value="all">Alla butiker</option>`;
   if (lastMenu?.sid) $("#mstore").value = lastMenu.sid;
   if (lastMenu?.data) renderMenu(lastMenu);
-  if (lastDish?.data) { $("#dname").value = lastDish.dish || ""; renderDish(lastDish.data); $("#dstatus").textContent = "Senaste sökningen. Skriv en ny maträtt för att jämföra igen."; }
+  if (lastDish?.data) { $("#dname").value = lastDish.dish || ""; renderDish(lastDish.data, lastDish.thumb); $("#dstatus").textContent = "Senaste sökningen. Skriv en ny maträtt för att jämföra igen."; }
   setCook(st.cook || "r");
   updateBadges();
   go(["favs","cook","list"].includes(st.screen) ? st.screen : "home");

@@ -90,9 +90,11 @@ def unit_price(o):
     return round(price / amount, 2), sym
 
 
-IMG_CACHE = Path(__file__).with_name(".img_cache")
+IMG_CACHE = Path(__file__).with_name(".img_cache2")
+IMG_MAX = 420     # sparad bildstorlek (skarp på retina i korten)
+CUT_SIZE = 220    # friläggningsmasken räknas fram på en liten kopia (snabbt) och skalas upp
 
-def cutout(im, tol=30):
+def cutout(im, tol=30, full=None):
     from PIL import Image, ImageFilter
     """Flood-fill från kanterna med den dominerande kantfärgen. Returnerar (RGBA, lyckades)."""
     im = im.convert("RGB"); w, h = im.size; px = im.load()
@@ -140,6 +142,9 @@ def cutout(im, tol=30):
     if kept_area < 0.06 * w * h: return None, False
     mask = Image.frombytes("L", (w, h), bytes(255 if lab[i] in keep else 0 for i in range(w*h)))
     mask = mask.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(0.9))
+    if full is not None:
+        im = full.convert("RGB")
+        mask = mask.resize(im.size, Image.BICUBIC).filter(ImageFilter.GaussianBlur(0.6))
     out = im.convert("RGBA"); out.putalpha(mask)
     bbox = mask.point(lambda v: 255 if v > 40 else 0).getbbox()
     if bbox:
@@ -149,7 +154,7 @@ def cutout(im, tol=30):
 
 
 def fetch_thumb(oid, url):
-    """Laddar ner, skalar till max 220 px och returnerar en WebP-data-URI (cachas lokalt)."""
+    """Laddar ner, skalar till max IMG_MAX px och returnerar (data-URI, frilagd) (cachas lokalt)."""
     cached = IMG_CACHE / f"{oid}.webp"
     if not cached.exists():
         try:
@@ -157,9 +162,9 @@ def fetch_thumb(oid, url):
             req = urllib.request.Request(url, headers={"User-Agent": "tilbud-app/1.0"})
             raw = urllib.request.urlopen(req, timeout=30).read()
             im = Image.open(io.BytesIO(raw)).convert("RGB")
-            im.thumbnail((220, 220))
+            im.thumbnail((IMG_MAX, IMG_MAX), Image.LANCZOS)
             buf = io.BytesIO()
-            im.save(buf, "WEBP", quality=62, method=6)
+            im.save(buf, "WEBP", quality=80, method=6)
             IMG_CACHE.mkdir(exist_ok=True)
             cached.write_bytes(buf.getvalue())
         except Exception:
@@ -169,11 +174,13 @@ def fetch_thumb(oid, url):
     if not cutf.exists() and not nocut.exists():
         from PIL import Image
         try:
-            out, ok = cutout(Image.open(cached))
+            big = Image.open(cached).convert("RGB")
+            small = big.copy(); small.thumbnail((CUT_SIZE, CUT_SIZE), Image.LANCZOS)
+            out, ok = cutout(small, full=big)
         except Exception:
             ok = False
         if ok:
-            buf = io.BytesIO(); out.save(buf, "WEBP", quality=70, method=6); cutf.write_bytes(buf.getvalue())
+            buf = io.BytesIO(); out.save(buf, "WEBP", quality=74, method=6, alpha_quality=80); cutf.write_bytes(buf.getvalue())
         else:
             nocut.touch()
     if cutf.exists():
@@ -189,12 +196,12 @@ def build_images(offers, out_dir):
     out_dir.mkdir(exist_ok=True)
     for f in out_dir.glob("*.json"):
         f.unlink()
-    # små filer (max 40 bilder) så att appen bara hämtar det som syns
+    # små filer (max 25 bilder) så att appen bara hämtar det som syns
     per, count = {}, {}
     for o, (u, cut) in zip(todo, uris):
         if u:
             n = count.get(o["c"], 0); count[o["c"]] = n + 1
-            key = f'{o["c"]}-{n // 40}'
+            key = f'{o["c"]}-{n // 25}'
             per.setdefault(key, {})[o["id"]] = u
             o["im"] = 2 if cut else 1  # 2 = frilagd
             o["ik"] = key
@@ -240,7 +247,7 @@ def main(out):
                     "cat": label,
                     "pg": o.get("catalog_page"),
                     "cid": c["id"],
-                    "_img": (o.get("images") or {}).get("thumb"),
+                    "_img": (o.get("images") or {}).get("view") or (o.get("images") or {}).get("thumb"),
                 })
             if len(batch) < 100:
                 break
