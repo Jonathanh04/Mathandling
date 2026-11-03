@@ -22,6 +22,7 @@ Appen visar veckans erbjudanden från butikerna vi handlar i, i Köpenhamn:
 | `fetch_tilbud.py` | Hämtar veckans erbjudanden från eTilbudsavis/Tjek API, kategoriserar dem och skriver `data.json` |
 | `data.json` | Senast hämtade erbjudanden |
 | `translations.json` | Danska produktnamn → svenska |
+| `images/` | Genereras av skriptet: frilagda produktbilder (WebP) i små JSON-filer. Ingår inte i git. |
 
 ## Uppdatera erbjudandena
 
@@ -29,7 +30,7 @@ Appen visar veckans erbjudanden från butikerna vi handlar i, i Köpenhamn:
 python3 fetch_tilbud.py
 ```
 
-Skriptet kräver bara Python 3 och ingen API-nyckel. Produktnamn som saknar svensk översättning hamnar i `untranslated.json`. Lägg in dem i `translations.json` och kör skriptet igen.
+Skriptet kräver Python 3 och Pillow (`pip install pillow`), men ingen API-nyckel. Det laddar ner produktbilderna, friläggs dem från bakgrunden och sparar dem i `images/`. Produktnamn som saknar svensk översättning hamnar i `untranslated.json`. Lägg in dem i `translations.json` och kör skriptet igen.
 
 ## Köra appen
 

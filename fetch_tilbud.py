@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Hämtar veckans tilbud från Tjek/eTilbudsavis för våra butiker i Köpenhamn,
 kategoriserar dem och skriver data.json som appen läser."""
-import json, re, sys, urllib.request, urllib.parse
+import base64, io, json, re, sys, urllib.request, urllib.parse
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -88,6 +90,119 @@ def unit_price(o):
     return round(price / amount, 2), sym
 
 
+IMG_CACHE = Path(__file__).with_name(".img_cache")
+
+def cutout(im, tol=30):
+    from PIL import Image, ImageFilter
+    """Flood-fill från kanterna med den dominerande kantfärgen. Returnerar (RGBA, lyckades)."""
+    im = im.convert("RGB"); w, h = im.size; px = im.load()
+    border = [(x, 0) for x in range(w)] + [(x, h-1) for x in range(w)] + [(0, y) for y in range(h)] + [(w-1, y) for y in range(h)]
+    q = lambda c: (c[0]//24, c[1]//24, c[2]//24)
+    counts = {}
+    for p in border: counts[q(px[p])] = counts.get(q(px[p]), 0) + 1
+    key, n = max(counts.items(), key=lambda kv: kv[1])
+    if n < 0.45 * len(border):
+        return None, False
+    ref = [0, 0, 0]; m = 0
+    for p in border:
+        if q(px[p]) == key:
+            c = px[p]; ref[0] += c[0]; ref[1] += c[1]; ref[2] += c[2]; m += 1
+    ref = tuple(v / m for v in ref)
+    close = lambda c: max(abs(c[0]-ref[0]), abs(c[1]-ref[1]), abs(c[2]-ref[2])) <= tol
+    seen = bytearray(w*h); dq = deque()
+    for p in border:
+        if close(px[p]) and not seen[p[1]*w+p[0]]:
+            seen[p[1]*w+p[0]] = 1; dq.append(p)
+    while dq:
+        x, y = dq.popleft()
+        for nx, ny in ((x+1,y),(x-1,y),(x,y+1),(x,y-1)):
+            if 0 <= nx < w and 0 <= ny < h and not seen[ny*w+nx] and close(px[nx, ny]):
+                seen[ny*w+nx] = 1; dq.append((nx, ny))
+    frac = sum(seen) / (w*h)
+    if not (0.12 <= frac <= 0.85):
+        return None, False
+    # behåll bara de största sammanhängande delarna (produkten), släng prislappar och textrester
+    lab = [0]*(w*h); comps = []; cid = 0
+    for start in range(w*h):
+        if seen[start] or lab[start]: continue
+        cid += 1; lab[start] = cid; dq2 = deque([start]); area = 0; minx=miny=10**9; maxx=maxy=-1
+        while dq2:
+            i = dq2.popleft(); area += 1; x, y = i % w, i // w
+            minx=min(minx,x); maxx=max(maxx,x); miny=min(miny,y); maxy=max(maxy,y)
+            for j in (i+1 if x+1<w else -1, i-1 if x>0 else -1, i+w if y+1<h else -1, i-w if y>0 else -1):
+                if j >= 0 and not seen[j] and not lab[j]:
+                    lab[j] = cid; dq2.append(j)
+        comps.append((area, cid, (maxx-minx+1)*(maxy-miny+1)))
+    if not comps: return None, False
+    big = max(c[0] for c in comps)
+    keep = {c[1] for c in comps if c[0] >= 0.42 * big}
+    kept_area = sum(c[0] for c in comps if c[1] in keep)
+    if kept_area < 0.06 * w * h: return None, False
+    mask = Image.frombytes("L", (w, h), bytes(255 if lab[i] in keep else 0 for i in range(w*h)))
+    mask = mask.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(0.9))
+    out = im.convert("RGBA"); out.putalpha(mask)
+    bbox = mask.point(lambda v: 255 if v > 40 else 0).getbbox()
+    if bbox:
+        out = out.crop(bbox)
+    return out, True
+
+
+
+def fetch_thumb(oid, url):
+    """Laddar ner, skalar till max 220 px och returnerar en WebP-data-URI (cachas lokalt)."""
+    cached = IMG_CACHE / f"{oid}.webp"
+    if not cached.exists():
+        try:
+            from PIL import Image
+            req = urllib.request.Request(url, headers={"User-Agent": "tilbud-app/1.0"})
+            raw = urllib.request.urlopen(req, timeout=30).read()
+            im = Image.open(io.BytesIO(raw)).convert("RGB")
+            im.thumbnail((220, 220))
+            buf = io.BytesIO()
+            im.save(buf, "WEBP", quality=62, method=6)
+            IMG_CACHE.mkdir(exist_ok=True)
+            cached.write_bytes(buf.getvalue())
+        except Exception:
+            return None, False
+    # friläggning: cachas som <id>.cut.webp (med alfa) eller <id>.nocut
+    cutf, nocut = IMG_CACHE / f"{oid}.cut.webp", IMG_CACHE / f"{oid}.nocut"
+    if not cutf.exists() and not nocut.exists():
+        from PIL import Image
+        try:
+            out, ok = cutout(Image.open(cached))
+        except Exception:
+            ok = False
+        if ok:
+            buf = io.BytesIO(); out.save(buf, "WEBP", quality=70, method=6); cutf.write_bytes(buf.getvalue())
+        else:
+            nocut.touch()
+    if cutf.exists():
+        return "data:image/webp;base64," + base64.b64encode(cutf.read_bytes()).decode(), True
+    return "data:image/webp;base64," + base64.b64encode(cached.read_bytes()).decode(), False
+
+
+def build_images(offers, out_dir):
+    """En JSON-fil per kategori: {offer_id: data-URI}. Non-food får inga bilder."""
+    todo = [o for o in offers if o.get("_img") and o["c"] != "ovrigt"]
+    with ThreadPoolExecutor(16) as ex:
+        uris = list(ex.map(lambda o: fetch_thumb(o["id"], o["_img"]), todo))
+    out_dir.mkdir(exist_ok=True)
+    for f in out_dir.glob("*.json"):
+        f.unlink()
+    # små filer (max 40 bilder) så att appen bara hämtar det som syns
+    per, count = {}, {}
+    for o, (u, cut) in zip(todo, uris):
+        if u:
+            n = count.get(o["c"], 0); count[o["c"]] = n + 1
+            key = f'{o["c"]}-{n // 40}'
+            per.setdefault(key, {})[o["id"]] = u
+            o["im"] = 2 if cut else 1  # 2 = frilagd
+            o["ik"] = key
+    for key, m in per.items():
+        (out_dir / f"{key}.json").write_text(json.dumps(m, separators=(",", ":")))
+    return sum(len(m) for m in per.values())
+
+
 def main(out):
     now = datetime.now(timezone.utc)
     tr = json.loads(TRANSLATIONS.read_text()) if TRANSLATIONS.exists() else {}
@@ -125,10 +240,14 @@ def main(out):
                     "cat": label,
                     "pg": o.get("catalog_page"),
                     "cid": c["id"],
+                    "_img": (o.get("images") or {}).get("thumb"),
                 })
             if len(batch) < 100:
                 break
             off += 100
+    n_img = build_images(offers, Path(out).with_name("images"))
+    for o in offers:
+        o.pop("_img", None)
     data = {
         "updated": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "stores": {k: {"name": v[0], "color": v[1]} for k, v in STORES.items()},
@@ -141,6 +260,7 @@ def main(out):
     for o in offers:
         counts[o["c"]] = counts.get(o["c"], 0) + 1
     print(len(offers), "erbjudanden", json.dumps(counts, ensure_ascii=False))
+    print(n_img, "produktbilder")
     print(len(missing), "matvarunamn saknar svensk översättning (se untranslated.json)")
 
 

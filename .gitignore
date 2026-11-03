@@ -1,3 +1,5 @@
 untranslated.json
 __pycache__/
 .DS_Store
+.img_cache/
+images/
