@@ -255,6 +255,27 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 .pick .pn{font-weight:600;font-size:13px;line-height:18px}
 .pick .pw{font-size:12px;line-height:16px;color:var(--text-muted);font-style:italic}
 
+/* --- prishistorik --- */
+:root{ --good:#1F7A50; --good-bg:#E3F4EC; --warn:#9A5B00; --warn-bg:#FFF1D6; }
+.hb{height:22px;padding:0 8px 0 6px;border-radius:var(--r-pill);font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.hb svg.lucide{width:13px;height:13px;stroke-width:2.2}
+.hb.good{background:var(--good-bg);color:var(--good)}
+.hb.warn{background:var(--warn-bg);color:var(--warn)}
+.hist{background:#fff;border-radius:var(--r-card);box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:12px}
+.hverdict{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;font-size:14px;line-height:20px;font-weight:500}
+.hverdict svg.lucide{flex:none;margin-top:1px}
+.hverdict.good{background:var(--good-bg);color:var(--good)}
+.hverdict.warn{background:var(--warn-bg);color:var(--warn)}
+.hverdict.neutral{background:var(--peach);color:var(--text)}
+.hchart{position:relative}
+.hchart svg{display:block;width:100%;height:auto;overflow:visible}
+.hchart .tip{position:absolute;transform:translate(-50%,calc(-100% - 10px));background:var(--text);color:#fff;font-size:12px;line-height:16px;padding:6px 9px;border-radius:10px;white-space:nowrap;pointer-events:none;font-weight:500}
+.hrows{display:flex;flex-direction:column}
+.hrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #FBEFE8;font-size:13px}
+.hrow:first-child{border-top:0}
+.hrow.now{font-weight:700}
+.hrow .muted{font-size:12px}
+
 /* --- bild i Var handla? --- */
 .photo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .photo input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
@@ -506,6 +527,7 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
     <button class="chip plain" type="button" data-v="save">Störst rabatt</button>
     <button class="chip plain" type="button" data-v="unit">Lägst jämförpris</button>
     <button class="chip plain" type="button" data-v="price">Lägst pris</button>
+    <button class="chip plain" type="button" data-v="hist">Bästa pris historiskt</button>
     <button class="chip plain" type="button" data-v="name">A–Ö</button>
   </div>
   <div class="toggle"><span>Visa non-food (kläder, elektronik …)</span><button class="sw" type="button" role="switch" id="fNon" aria-checked="false" aria-label="Visa non-food"></button></div>
@@ -550,6 +572,67 @@ function discount(o){ return o.pp && o.pp > o.p ? (o.pp - o.p) / o.pp : 0; }
 const pretty = t => { t = String(t || ""); const letters = t.replace(/[^A-Za-zÅÄÖÆØåäöæø]/g, ""); return letters.length > 3 && letters === letters.toUpperCase() ? t.charAt(0) + t.slice(1).toLowerCase() : t; };
 const nm = o => pretty(o.sv || o.n);
 const unitTxt = o => o.uu === "kg" ? "/kg" : o.uu === "l" ? "/l" : "/st";
+// ISO-veckonummer för en datumsträng "YYYY-MM-DD"
+const isoWeek = ds => { const d = new Date(ds + "T12:00:00Z"); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day); const y = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return Math.ceil(((d - y) / 864e5 + 1) / 7); };
+/* Prishistorik: jämför priset man betalar med tidigare kampanjer för samma vara i samma butik.
+   (Jämförpriset är opålitligt när förpackningsstorleken anges som ett intervall, så det används inte här.) */
+function histInfo(o){
+  const h = Array.isArray(o.h) ? o.h : []; if (!h.length) return null;
+  const cur = o.p;
+  let min = Infinity, minF = null;
+  h.forEach(([f, p]) => { if (p < min) { min = p; minF = f; } });
+  const gain = (min - cur) / min;  // >0 = billigare än tidigare lägsta
+  const kind = gain > 0.005 ? "best" : gain >= -0.005 ? "same" : "higher";
+  const minRow = h.find(r => r[0] === minF);
+  return { kind, gain, minF, minP: minRow[1], firstF: h[0][0], n: h.length };
+}
+function histBadge(o){
+  const hi = histInfo(o); if (!hi) return "";
+  if (hi.kind === "best") return `<span class="hb good" title="Lägsta kampanjpriset sedan v. ${isoWeek(hi.firstF)}">${icon("trending-down")}Bästa pris</span>`;
+  if (hi.kind === "higher") return `<span class="hb warn" title="Har varit ${esc(krs(hi.minP))} vecka ${isoWeek(hi.minF)}">${icon("history")}Billigare v. ${isoWeek(hi.minF)}</span>`;
+  return "";
+}
+function histSection(o){
+  const hi = histInfo(o);
+  if (!hi) return `<div class="hist"><h2 class="t-section">Prishistorik</h2><div class="hverdict neutral">${icon("sparkles")}<span>Första gången vi ser den här varan på kampanj i ${esc(DATA.stores[o.s].name)}. Historiken byggs på varje fredag.</span></div></div>`;
+  const wkFirst = isoWeek(hi.firstF), wkMin = isoWeek(hi.minF);
+  const verdict = hi.kind === "best"
+    ? `<div class="hverdict good">${icon("trending-down")}<span>Lägsta kampanjpriset sedan vecka ${wkFirst}${hi.gain >= 0.02 ? `, ${Math.round(hi.gain * 100)} % under tidigare lägsta` : ""}.</span></div>`
+    : hi.kind === "same"
+    ? `<div class="hverdict neutral">${icon("equal")}<span>Samma pris som det lägsta vi har sett (vecka ${wkMin}).</span></div>`
+    : `<div class="hverdict warn">${icon("history")}<span>Har varit billigare: ${esc(krs(hi.minP))} vecka ${wkMin}. Kanske värt att vänta.</span></div>`;
+  const curLabel = status(o) === "soon" ? "kommande" : "nu";
+  const pts = [...o.h.map(([f, p, up]) => ({ f, p, up, now: false })), { f: o.f.slice(0, 10), p: o.p, up: o.up, now: true, lbl: curLabel }];
+  return `<div class="hist"><h2 class="t-section">Prishistorik</h2>${verdict}${histChart(pts)}
+    <div class="hrows" role="table" aria-label="Kampanjpriser per vecka">${pts.slice().reverse().map(r => `<div class="hrow ${r.now ? "now" : ""}" role="row"><span role="cell">Vecka ${isoWeek(r.f)}${r.now ? ` · ${r.lbl}` : ""}</span><span role="cell"><span class="price">${esc(krs(r.p))}</span>${r.up ? ` <span class="muted">· ${esc(krs(r.up))}/${esc(o.uu || "")}</span>` : ""}</span></div>`).join("")}</div>
+    <p class="status" style="margin:0">Kampanjpriser från reklambladen, inte hyllpriser.</p></div>`;
+}
+function histChart(pts){
+  const W = 320, H = 150, L = 44, R = 14, T = 16, B = 26;
+  const vals = pts.map(p => p.p), lo0 = Math.min(...vals), hi0 = Math.max(...vals);
+  const step = (() => { const span = Math.max(hi0 - lo0, hi0 * 0.2, 1), raw = span / 3, mag = 10 ** Math.floor(Math.log10(raw)), n = raw / mag; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * mag; })();
+  const lo = Math.max(0, Math.floor((lo0 - step * 0.5) / step) * step), hi = Math.ceil((hi0 + step * 0.5) / step) * step;
+  const ticks = []; for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(2));
+  const t0 = +new Date(pts[0].f), t1 = +new Date(pts[pts.length - 1].f);
+  const x = f => pts.length === 1 || t1 === t0 ? (L + W - R) / 2 : L + (+new Date(f) - t0) / (t1 - t0) * (W - L - R);
+  const y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const path = pts.map((p, i) => `${i ? "L" : "M"}${x(p.f).toFixed(1)},${y(p.p).toFixed(1)}`).join(" ");
+  return `<div class="hchart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kampanjpriser över tid">
+    ${ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#F3E6DE" stroke-width="1"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#6E6E73">${esc(krs(v).replace(" kr", ""))}</text>`).join("")}
+    <path d="${path}" fill="none" stroke="#E2581E" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity=".55"/>
+    ${pts.map(p => `<text x="${x(p.f)}" y="${H - 6}" text-anchor="middle" font-size="11" fill="${p.now ? "#1C1C1E" : "#6E6E73"}" font-weight="${p.now ? 700 : 400}">v. ${isoWeek(p.f)}</text>`).join("")}
+    ${pts.map(p => `<g class="hpt" data-tip="Vecka ${isoWeek(p.f)}${p.now ? ` (${p.lbl})` : ""}: ${esc(krs(p.p))}" data-x="${x(p.f)}" data-y="${y(p.p)}" tabindex="0">
+      <circle cx="${x(p.f)}" cy="${y(p.p)}" r="18" fill="transparent"/>
+      <circle cx="${x(p.f)}" cy="${y(p.p)}" r="${p.now ? 7 : 5}" fill="${p.now ? "#E2581E" : "#fff"}" stroke="${p.now ? "#fff" : "#E2581E"}" stroke-width="${p.now ? 2.5 : 2}"/></g>`).join("")}
+    ${(() => { const c = pts[pts.length - 1]; return `<text x="${Math.min(x(c.f), W - R - 2)}" y="${y(c.p) - 12}" text-anchor="end" font-size="12" font-weight="700" fill="#1C1C1E">${esc(krs(c.p))}</text>`; })()}
+  </svg><div class="tip" hidden></div></div>`;
+}
+function wireHistChart(root){
+  const box = root.querySelector(".hchart"); if (!box) return;
+  const tip = box.querySelector(".tip"), svg = box.querySelector("svg");
+  const show = g => { const r = svg.getBoundingClientRect(), k = r.width / 320; tip.textContent = g.dataset.tip; tip.style.left = (+g.dataset.x * k) + "px"; tip.style.top = (+g.dataset.y * k) + "px"; tip.hidden = false; };
+  box.querySelectorAll(".hpt").forEach(g => { g.addEventListener("pointerenter", () => show(g)); g.addEventListener("click", () => show(g)); g.addEventListener("focus", () => show(g)); g.addEventListener("pointerleave", () => tip.hidden = true); g.addEventListener("blur", () => tip.hidden = true); });
+}
 
 /* ================= bilder (lazy per kategori) ================= */
 const imgFiles = {};
@@ -683,6 +766,7 @@ function sorter(a, b){
     case "unit": return (a.uu === b.uu ? 0 : (a.uu||"z").localeCompare(b.uu||"z")) || (a.up ?? 1e9) - (b.up ?? 1e9);
     case "price": return (a.p ?? 1e9) - (b.p ?? 1e9);
     case "name": return nm(a).localeCompare(nm(b), "sv");
+    case "hist": return (histInfo(b)?.gain ?? -1) - (histInfo(a)?.gain ?? -1) || discount(b) - discount(a);
     default: return discount(b) - discount(a) || (b.im || 0) - (a.im || 0) || (a.up ?? 1e9) - (b.up ?? 1e9);
   }
 }
@@ -694,7 +778,7 @@ function offerCard(o, i){
   return `<article class="ocard press" style="--bg-card:${PASTELS[i % 4]}" data-open="${esc(o.id)}" tabindex="0" aria-label="${esc(nm(o))}, ${esc(kr(o.p))}, ${esc(DATA.stores[o.s].name)}">
     <div class="otop"><h3>${esc(nm(o))}</h3>
       <button class="heart" type="button" data-fav="${esc(o.id)}" aria-pressed="${fav}" aria-label="Favorit">${icon("heart")}</button></div>
-    <div class="ometa">${storeChip(o.s)}${status(o, now) === "soon" ? `<span class="soonb">från ${esc(dlong(new Date(o.f)))}</span>` : ""}</div>
+    <div class="ometa">${storeChip(o.s)}${status(o, now) === "soon" ? `<span class="soonb">från ${esc(dlong(new Date(o.f)))}</span>` : histBadge(o)}</div>
     <div class="pimg">${d >= 0.05 ? `<span class="disc">−${Math.round(d*100)} %</span>` : ""}${imgTag(o)}<span class="ph">${icon(CATICON[o.c] || "package")}</span></div>
     <div class="pricepill"><span class="pv"><b class="price">${esc(krs(o.p))}</b>${o.pp && o.pp > o.p ? `<s>${esc(krs(o.pp))}</s>` : ""}</span><span class="sp"></span>
       <button class="cartbtn" type="button" data-add="${esc(o.id)}" aria-pressed="${on}" aria-label="Lägg på inköpslistan">${icon("shopping-bag")}</button></div>
@@ -825,13 +909,14 @@ function openDetail(id){
         <p class="dtext">${esc(o.d || "Ingen beskrivning i reklambladet.")}</p>
         ${o.sv ? `<p class="dtext" style="margin-top:6px;font-size:13px">På danska: <i>${esc(o.n)}</i></p>` : ""}
         <p class="dtext" style="margin-top:6px;font-size:13px">${esc(CATNAME[o.c])} · ${esc(o.cat || "")}${o.pg ? `, sida ${esc(o.pg)}` : ""}</p></div>
+      ${histSection(o)}
       ${sim.length ? `<div><div class="sechead" style="margin-bottom:10px"><h2 class="t-section">Liknande erbjudanden</h2><button class="link" type="button" id="dSeeAll">Se alla</button></div>
         <div class="hscroll noscroll">${sim.map(miniCard).join("")}</div></div>` : ""}
     </div></div>`;
   go("detail");
   st.detail = id;
   if (o.im) imgFor(o).then(u => { const im = $("#dImg"); if (u && im) { im.onload = () => { im.classList.add("ok"); im.parentElement.querySelector(".ph")?.remove(); }; im.src = u; } });
-  hydrate($("#s-detail")); renderCta();
+  hydrate($("#s-detail")); renderCta(); wireHistChart($("#s-detail"));
   $("#dBack").onclick = () => go(prevScreen);
   $("#dShare").onclick = async () => {
     const txt = `${nm(o)}: ${kr(o.p)} på ${DATA.stores[o.s].name} (${until.toLowerCase()})`;

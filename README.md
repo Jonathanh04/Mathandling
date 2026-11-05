@@ -13,6 +13,7 @@ Appen visar veckans erbjudanden från butikerna vi handlar i, i Köpenhamn:
 - **Receptgenerator**: väljer recept utifrån kampanjvarorna i en butik (eller alla butiker), med önskemål som vegetariskt, snabbt eller barnvänligt. Ingredienser som är på kampanj visas med pris och kan läggas i inköpslistan.
 - **Var ska jag handla?**: skriv en maträtt, t.ex. "Tuna melt", eller bifoga en bild på rätten, så visas för varje ingrediens var den är billigast och var kvaliteten är bäst den här veckan. Appen räknar ut bästa butiken för hela handlingen, hur mycket du sparar på att dela upp den och var kvaliteten är bäst.
 - **Veckomeny**: planerar 3–7 middagar på dagens erbjudanden, återanvänder ingredienser mellan dagarna och lägger hela veckans handling på listan med ett tryck. Menyn delas med hushållet.
+- **Prishistorik**: varje vecka sparas kampanjpriserna per vara och butik. Korten märks "Bästa pris" eller "Billigare v. 44", och produktsidan visar en graf över tidigare kampanjpriser.
 - **Delad inköpslista**, grupperad per butik och med en summa.
 
 ## Filer
@@ -23,6 +24,8 @@ Appen visar veckans erbjudanden från butikerna vi handlar i, i Köpenhamn:
 | `fetch_tilbud.py` | Hämtar veckans erbjudanden från eTilbudsavis/Tjek API, kategoriserar dem och skriver `data.json` |
 | `data.json` | Senast hämtade erbjudanden |
 | `translations.json` | Danska produktnamn → svenska |
+| `history.json` | Prishistorik: kampanjpriser per vara och butik över tid (byggs på varje vecka) |
+| `backfill_history.py` | Engångsskript som fyllde historiken från äldre `data.json` i git |
 | `images/` | Genereras av skriptet: frilagda produktbilder (WebP) i små JSON-filer. Ingår inte i git. |
 
 ## Uppdatera erbjudandena

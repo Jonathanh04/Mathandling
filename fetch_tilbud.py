@@ -52,6 +52,49 @@ LIMIT = re.compile(r"maks\.? ?\d+[^.]*pr\.? ?(kunde|husstand)", re.I)
 
 
 TRANSLATIONS = Path(__file__).with_name("translations.json")
+HISTORY = Path(__file__).with_name("history.json")
+HIST_KEEP = 60    # max antal sparade kampanjperioder per vara
+
+
+def hist_key(store_id, heading):
+    """Samma vara vecka till vecka: butik + normaliserat produktnamn."""
+    h = re.sub(r"[*®™]", "", heading or "").lower()
+    return store_id + "|" + re.sub(r"\s+", " ", h).strip()
+
+
+def load_history():
+    if HISTORY.exists():
+        return json.loads(HISTORY.read_text())
+    return {"v": 1, "items": {}}
+
+
+def add_to_history(hist, offers):
+    """Lägger till kampanjperioder: [från, till, pris, jämförpris, ordinarie pris]. En rad per vara och period (lägsta priset)."""
+    items = hist["items"]
+    for o in offers:
+        if o.get("c") == "ovrigt" or o.get("p") is None:
+            continue
+        k = hist_key(o["s"], o["n"])
+        rows = items.setdefault(k, [])
+        row = [o["f"][:10], o["t"][:10], o["p"], o.get("up"), o.get("pp")]
+        same = [r for r in rows if r[0] == row[0]]
+        if same:  # "eller"-varor: behåll lägsta priset per kampanjperiod
+            if row[2] < same[0][2]:
+                rows[rows.index(same[0])] = row
+            continue
+        rows.append(row)
+        rows.sort(key=lambda r: r[0])
+        del rows[:-HIST_KEEP]
+    return hist
+
+
+def attach_history(hist, offers):
+    """Ger varje erbjudande tidigare kampanjperioder (före den här) som fält "h": [[från, pris, jämförpris], …]."""
+    for o in offers:
+        rows = hist["items"].get(hist_key(o["s"], o["n"]), [])
+        past = [[r[0], r[2], r[3]] for r in rows if r[0] < o["f"][:10]]
+        if past:
+            o["h"] = past[-12:]
 
 def get(path, **params):
     url = f"{API}/{path}?{urllib.parse.urlencode(params)}"
@@ -252,6 +295,9 @@ def main(out):
             if len(batch) < 100:
                 break
             off += 100
+    hist = add_to_history(load_history(), offers)
+    HISTORY.write_text(json.dumps(hist, ensure_ascii=False, separators=(",", ":")))
+    attach_history(hist, offers)
     n_img = build_images(offers, Path(out).with_name("images"))
     for o in offers:
         o.pop("_img", None)
@@ -268,6 +314,7 @@ def main(out):
         counts[o["c"]] = counts.get(o["c"], 0) + 1
     print(len(offers), "erbjudanden", json.dumps(counts, ensure_ascii=False))
     print(n_img, "produktbilder")
+    print(len(hist["items"]), "varor i prishistoriken,", sum(1 for o in offers if o.get("h")), "erbjudanden har tidigare kampanjpriser")
     print(len(missing), "matvarunamn saknar svensk översättning (se untranslated.json)")
 
 
