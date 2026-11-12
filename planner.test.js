@@ -89,6 +89,8 @@
     t("Allergener", "färdigprodukt tillåts utan allergier", () => eq(P.violations({ text: "Vitasia asiatiska färdigrätter" }, prefs({})), []));
     t("Filter", "non-food i matkategori tas bort", () =>
       eq(P.filterOffers([offer("x", "netto", "Duracell batterier", "torr"), offer("y", "netto", "Rummo pasta", "torr")], prefs({}), NOW).ok.map(o => o.id), ["y"]));
+    t("Filter", "blombuketter i grönsakskategorin tas bort", () =>
+      eq(P.filterOffers([offer("x", "netto", "Buket med roser", "gront"), offer("y", "netto", "Trefärgad ros", "gront"), offer("z", "netto", "Rosenkål", "gront")], prefs({}), NOW).ok.map(o => o.id), ["z"]));
     t("Kost", "växtbaserat ord i beskrivningen släpper inte igenom kött", () => {
       const o = { sv: "Krokmörad dansk fläskstek", n: "Flæskesteg", d: "Server med vegansk sauce", c: "kott" };
       ok(P.violations({ text: P.offerText(o), name: P.offerName(o), cat: o.c }, prefs({ diet: "vegetarian" })).length > 0);
@@ -221,6 +223,56 @@
     t("Budget", "kostnad per rätt räknas på använd mängd", () => {
       const r = P.recipeCost(plan.slots[0].recipe, prefs({ adults: 2 }), shopOffers);
       eq([r.exact, r.est], [23, 8]); // 300/500 × 30 = 18 + 250/500 × 10 = 5; tomater 8 (salt är basvara)
+    });
+
+    /* ---------------- Planering ---------------- */
+    const planPrefs = prefs({ adults: 2, kids: 1, meals: ["breakfast", "dinner"], days: ["mon", "tue", "wed"], allergies: ["nuts"],
+      diet: "vegetarian", dislikes: ["mushroom"], appliances: ["spis", "ugn"], budget: 600, pantry: ["eggs"] });
+    t("Planering", "budget fördelas per måltid och summerar till veckobudgeten", () => {
+      const b = P.planBudget(planPrefs);   // 2,5 portioner × 3 dagar
+      near(b.perMeal.breakfast * 3 * 2.5 + b.perMeal.dinner * 3 * 2.5, 600);
+      ok(b.perMeal.dinner > b.perMeal.breakfast);
+    });
+    t("Planering", "kraven i prompten nämner allergi, kost, ogillar, utrustning och budget", () => {
+      const c = P.constraintsText(planPrefs);
+      ["Nötter", "ALDRIG", "Vegetariskt", "Svamp", "spis, ugn", "600 kr", "2.5 portioner", "Ägg"].forEach(w => ok(c.includes(w), `saknar "${w}"`));
+    });
+    t("Planering", "underlaget har bara matlagningsvaror som klarar kraven", () => {
+      const offs = [offer("m", "netto", "Mjölk", "mejeri"), offer("n", "netto", "Hasselnötter", "torr"), offer("d", "netto", "Läsk", "dryck"),
+        offer("k", "netto", "Kycklingfilé", "kott"), offer("b", "netto", "Broccoli", "gront")];
+      eq(P.planOffers(offs, prefs({ allergies: ["nuts"], diet: "vegetarian" }), NOW).map(o => o.id), ["m", "b"]);
+    });
+    t("Planering", "receptet städas: tal begränsas, tomma ingredienser tas bort", () => {
+      const r = P.normalizeRecipe({ title: "Test", time_min: 9999, kcal: -5, ingredients: [{ name: "lök", amount: "1 st", est_price: 3 }, { name: "" }], steps: ["a", ""] }, planPrefs);
+      eq([r.time_min, r.kcal, r.ingredients.length, r.steps.length, r.servings], [600, 0, 1, 1, 2.5]);
+    });
+    const pOffers = { b: offer("b", "netto", "Broccoli", "gront"), n: offer("n", "netto", "Hasselnötter", "torr"), x: offer("x", "lidl", "Broccoli", "gront") };
+    t("Planering", "koppling till vara utanför underlaget tas bort", () => {
+      const { recipe } = P.checkRecipe({ ingredients: [{ name: "broccoli", offer_id: "x", est_price: 12 }], steps: ["koka"], equipment: ["spis"] },
+        planPrefs, pOffers, new Set(["b"]));
+      eq([recipe.ingredients[0].offer_id, recipe.ingredients[0].est_price], [null, 12]);
+    });
+    t("Planering", "recept med allergen underkänns", () => {
+      const { violations } = P.checkRecipe({ ingredients: [{ name: "rostade hasselnötter" }], steps: ["rosta"], equipment: ["ugn"] }, planPrefs, pOffers, new Set(["b"]));
+      ok(violations.some(v => v.id === "nuts"));
+    });
+    t("Planering", "recept med saknad utrustning underkänns", () => {
+      const { violations } = P.checkRecipe({ ingredients: [{ name: "broccoli" }], steps: ["fritera"], equipment: ["airfryer"] }, planPrefs, pOffers, new Set());
+      eq(violations.map(v => v.type), ["utrustning"]);
+    });
+    t("Planering", "godkänt recept: huvudråvara väljs från kopplad vara", () => {
+      const { recipe, violations } = P.checkRecipe({ ingredients: [{ name: "broccoli", offer_id: "b" }, { name: "vitlök" }], steps: ["stek"], equipment: ["spis"] },
+        planPrefs, pOffers, new Set(["b"]));
+      eq([violations.length, recipe.main_offer_id], [0, "b"]);
+    });
+    t("Planering", "ögonblicksbild av använda erbjudanden", () => {
+      const snap = P.snapshotOffers({ slots: [{ recipe: { main_offer_id: "b", ingredients: [{ name: "broccoli", offer_id: "b" }, { name: "lök" }] } }] }, pOffers);
+      eq(Object.keys(snap), ["b"]); eq(snap.b.p, 20);
+    });
+    t("Planering", "pool kör högst två jobb samtidigt och behåller ordningen", async () => {
+      let active = 0, peak = 0;
+      const r = await P.pool([1, 2, 3, 4, 5], 2, async x => { active++; peak = Math.max(peak, active); await Promise.resolve(); active--; return x * 10; });
+      eq(r, [10, 20, 30, 40, 50]); ok(peak <= 2);
     });
 
     /* ---------------- Sparning ---------------- */

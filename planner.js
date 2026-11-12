@@ -234,7 +234,9 @@
     "bloklys", "stearinlys", "duftlys", "kertelys", "lys i glas", "tomtebloss", "stjernekaster", "kattmat", "kattemad", "hundmat",
     "hundemad", "fågelfrö", "talgboll", "fuglebolde", "vildfugle", "klädgalge", "bøjle", B + "pall" + E, "skammel", "avkalk",
     "afkalk", "avloppsrens", "afløbsrens", "skin tint", "kvarn", "kværn", "skummare", "skummer" + E, "burk med", "dåse med",
-    "smörgåspapper", "frokostfolie", "servett", "serviet"]);
+    "smörgåspapper", "frokostfolie", "servett", "serviet", "bukett", "buket" + E, "blomster", "blommor", "tulpan", "tulipan", B + "roser" + E, B + "ros" + E, B + "rose" + E,
+    "julros", "julerose", "julstjärna", "julestjerne", "potteplante", "krukväxt", "orkidé", "orkide", "amaryllis", "hyacint", "kalanchoe",
+    B + "krans" + E, "dekoration", "pynt" + E]);
 
   // Kategorier i data.json som i sig avgör kost
   const CAT_MEAT = new Set(["kott", "chark"]);
@@ -753,6 +755,193 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* 7. Planering: underlag, prompter, kontroll av recept                 */
+  /* ------------------------------------------------------------------ */
+
+  // Kategorier som används för att laga mat (inte dryck, godis eller non-food)
+  const PLAN_CATS = new Set(["kott", "chark", "fisk", "frukt", "gront", "mejeri", "ost", "brod", "fryst", "fardig", "torr"]);
+
+  /* Erbjudanden som planen får bygga på: valda butiker, gäller idag, matlagningskategorier, inga regelbrott. */
+  function planOffers(offers, prefs, now = new Date()) {
+    return filterOffers(offers, prefs, now).ok.filter(o => PLAN_CATS.has(o.c));
+  }
+
+  /* Budget per portion och måltid, fördelad efter måltidernas normala andel (middag dyrare än frukost). */
+  function planBudget(prefs) {
+    const total = prefs.budget || budgetRange(prefs).suggested;
+    const chosen = MEALS.filter(m => (prefs.meals || []).includes(m.id));
+    const days = (prefs.days || []).length, pm = portionsPerMeal(prefs);
+    const weight = chosen.reduce((a, m) => a + m.share, 0) || 1;
+    const perMeal = {};
+    for (const m of chosen) perMeal[m.id] = days && pm ? round2(total * (m.share / weight) / days / pm) : 0;
+    return { total, perPortion: portionsPerWeek(prefs) ? round2(total / portionsPerWeek(prefs)) : 0, perMeal };
+  }
+
+  const mealLabel = id => (MEALS.find(m => m.id === id) || { label: id }).label;
+  const dayLabel = id => (DAYS.find(d => d.id === id) || { label: id }).label;
+
+  /* Kraven som text till Claude. Samma text i alla anrop så att reglerna är identiska. */
+  function constraintsText(prefs) {
+    const L = (ids, all) => ids.map(id => (all.find(x => x.id === id) || { label: id }).label).join(", ");
+    const kcal = mealCalorieTargets(prefs);
+    const b = planBudget(prefs);
+    const lines = [
+      `- Hushåll: ${prefs.adults} vuxna och ${prefs.kids} barn = ${portionsPerMeal(prefs)} portioner per måltid (barn räknas som halv portion). Skriv recepten för exakt ${portionsPerMeal(prefs)} portioner.`,
+      `- Kost: ${L([prefs.diet], DIETS)}.`,
+      prefs.allergies.length ? `- ALLERGIER (får ALDRIG förekomma, inte heller som spår, i sås, buljong, krydda eller färdigprodukt): ${L(prefs.allergies, ALLERGENS)}.` : "- Inga allergier.",
+      (prefs.dislikes.length || prefs.dislikeCustom.length) ? `- Använd aldrig: ${[L(prefs.dislikes, DISLIKES), ...prefs.dislikeCustom].filter(Boolean).join(", ")}.` : null,
+      `- Köksutrustning som finns (använd ingen annan): ${L(prefs.appliances, APPLIANCES)}. Ange i "equipment" med id: ${prefs.appliances.join(", ")}.`,
+      prefs.vibes.length ? `- Stil: ${L(prefs.vibes, VIBES)}.` : null,
+      kcal ? `- Kalorimål per vuxen portion: ${Object.entries(kcal).map(([m, k]) => `${mealLabel(m).toLowerCase()} ca ${k} kcal`).join(", ")}${prefs.calories.protein ? `; protein totalt ca ${prefs.calories.protein} g/dag` : ""}.` : "- Inget kalorimål: balanserade, mättande måltider.",
+      prefs.pantry.length ? `- Finns redan hemma, använd gärna först: ${L(prefs.pantry, PANTRY)}. Salt, peppar, olja och vatten finns alltid.` : "- Salt, peppar, olja och vatten finns alltid hemma.",
+      `- Budget: ${b.total} kr för hela veckan, alltså ca ${b.perPortion} kr per portion i snitt (${Object.entries(b.perMeal).map(([m, k]) => `${mealLabel(m).toLowerCase()} ca ${k} kr`).join(", ")}). Håll dig under.`,
+    ];
+    return lines.filter(Boolean).join("\n");
+  }
+
+  function offerLines(offers, stores) {
+    return offers.map(o => `${o.id}|${(stores[o.s] || {}).name || o.s}|${o.sv || o.n}|${o.p} kr${o.up ? ` (${o.up} kr/${o.uu})` : ""}|${String(o.d || "").slice(0, 60)}`).join("\n");
+  }
+
+  /* Steg 1: veckans skiss. Claude ser alla platser och hela erbjudandelistan på en gång. */
+  function skeletonPrompt({ prefs, offers, stores, slots: sl }) {
+    const slotLines = sl.map((s, i) => `${i}: ${dayLabel(s.day)} ${s.date} – ${mealLabel(s.meal)}`).join("\n");
+    return `Du planerar en veckomatsedel för ett hushåll i Köpenhamn som handlar i: ${[...new Set(offers.map(o => (stores[o.s] || {}).name))].join(", ")}.
+
+Krav:
+${constraintsText(prefs)}
+
+Gör en SKISS för varje plats nedan: rättens namn och vilka kampanjvaror den bygger på.
+- Bygg på kampanjvarorna i listan så att veckan blir så billig som möjligt inom budget.
+- Återanvänd råvaror mellan dagarna så att förpackningar tar slut och inget blir över (t.ex. halva kålhuvudet måndag, resten torsdag; stek blir lunch dagen efter).
+- Variera proteiner, kök och tillagning. Enkla rätter på vardagar, mer tid på helgen.
+- Frukost får gärna vara samma 2–3 rätter som återkommer: sätt då "same_as" till platsens nummer där rätten först förekommer.
+- Lunch får gärna vara rester av gårdagens middag (skriv det i "idea").
+- Använd bara offer_id ur listan.
+
+Platser:
+${slotLines}
+
+Svara ENDAST med JSON:
+{"tip":"en mening om hur veckan sparar pengar och minskar svinn","slots":[{"i":0,"title":"...","idea":"kort beskrivning","main_offer_ids":["ID1","ID2"],"same_as":null}]}
+
+Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+${offerLines(offers, stores)}`;
+  }
+
+  /* Steg 2: fullständiga recept för några av platserna, med skissen som sammanhang. */
+  function recipesPrompt({ prefs, offers, stores, skeleton, items }) {
+    const plan = skeleton.map(s => `${s.i}: ${dayLabel(s.day)} ${mealLabel(s.meal)} – ${s.title}${s.same_as != null ? ` (samma som ${s.same_as})` : ""}`).join("\n");
+    const want = items.map(s => `${s.i}: ${mealLabel(s.meal)} – ${s.title}. ${s.idea || ""}${(s.main_offer_ids || []).length ? ` Bygger på: ${s.main_offer_ids.join(", ")}.` : ""}`).join("\n");
+    return `Du skriver recept till en veckomatsedel för ett hushåll i Köpenhamn.
+
+Krav (gäller varje recept):
+${constraintsText(prefs)}
+
+Hela veckans plan (för sammanhang och återanvändning av råvaror):
+${plan}
+
+Skriv fullständiga recept för de här platserna:
+${want}
+
+Regler för recepten:
+- Svenska, metriska mått (g, ml, dl, msk, tsk, st). 4–8 korta steg.
+- Varje ingrediens: "offer_id" om den köps som en av kampanjvarorna nedan, annars null. "est_price" = uppskattat normalt danskt butikspris i kr för den mängd som används (även för kampanjvaror, som reserv). "pantry": true för salt, peppar, olja, vatten och torra kryddor.
+- "equipment" = de apparater som behövs, bara bland: ${prefs.appliances.join(", ")}.
+- "kcal", "protein", "carbs", "fat" = uppskattning per vuxen portion.
+- "main_offer_id" = kampanjvaran som är rättens huvudråvara (för bild), eller null.
+
+Svara ENDAST med JSON:
+{"recipes":[{"i":0,"title":"...","description":"en mening","time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["...","..."]}]}
+
+Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+${offerLines(offers, stores)}`;
+  }
+
+  /* Ett enda recept, t.ex. när ett recept bröt mot ett krav eller vid "Byt". */
+  function singleRecipePrompt({ prefs, offers, stores, slot, skeleton, avoidTitles = [], problem = "" }) {
+    const plan = (skeleton || []).map(s => `${dayLabel(s.day)} ${mealLabel(s.meal)} – ${s.title}`).join("\n");
+    return `Du skriver ETT recept till en veckomatsedel för ett hushåll i Köpenhamn.
+
+Krav:
+${constraintsText(prefs)}
+
+${plan ? `Resten av veckan (återanvänd gärna råvaror härifrån):\n${plan}\n\n` : ""}Platsen: ${dayLabel(slot.day)} ${slot.date} – ${mealLabel(slot.meal)}.
+${avoidTitles.length ? `Föreslå INTE något av detta: ${avoidTitles.join("; ")}.\n` : ""}${problem ? `Det förra förslaget underkändes: ${problem}. Undvik det helt.\n` : ""}
+Samma regler som för övriga recept: svenska, metriska mått, offer_id eller null, est_price för varje ingrediens, pantry för basvaror, equipment bara bland ${prefs.appliances.join(", ")}, kcal/protein/carbs/fat per vuxen portion, main_offer_id.
+
+Svara ENDAST med JSON:
+{"recipe":{"title":"...","description":"en mening","time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"...","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["..."]}}
+
+Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+${offerLines(offers, stores)}`;
+  }
+
+  const num = (v, lo, hi) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : null; };
+  const str = (v, max) => String(v == null ? "" : v).trim().slice(0, max);
+
+  /* Städar ett recept från Claude till appens form. Okända fält tas bort, tal begränsas. */
+  function normalizeRecipe(raw, prefs) {
+    raw = raw && typeof raw === "object" ? raw : {};
+    const ings = (Array.isArray(raw.ingredients) ? raw.ingredients : []).slice(0, 30).map(i => ({
+      name: str(i && i.name, 60), amount: str(i && i.amount, 30),
+      offer_id: i && i.offer_id ? String(i.offer_id) : null,
+      est_price: num(i && i.est_price, 0, 500) || 0,
+      pantry: !!(i && i.pantry),
+    })).filter(i => i.name);
+    return {
+      title: str(raw.title, 80) || "Namnlös rätt",
+      description: str(raw.description, 200),
+      time_min: num(raw.time_min, 1, 600),
+      servings: num(raw.servings, 0.5, 30) || portionsPerMeal(prefs) || 2,
+      equipment: (Array.isArray(raw.equipment) ? raw.equipment : []).map(String).filter((x, i, a) => a.indexOf(x) === i),
+      kcal: num(raw.kcal, 0, 3000), protein: num(raw.protein, 0, 300), carbs: num(raw.carbs, 0, 500), fat: num(raw.fat, 0, 300),
+      main_offer_id: raw.main_offer_id ? String(raw.main_offer_id) : null,
+      ingredients: ings,
+      steps: (Array.isArray(raw.steps) ? raw.steps : []).map(s => str(s, 400)).filter(Boolean).slice(0, 15),
+    };
+  }
+
+  /* Kontrollerar ett recept: kopplingar till varor som inte får användas tas bort (ingrediensen blir
+     uppskattad i stället), och alla hårda krav prövas. Returnerar { recipe, violations }. */
+  function checkRecipe(raw, prefs, offersById, allowedIds) {
+    const r = normalizeRecipe(raw, prefs);
+    for (const ing of r.ingredients) {
+      if (ing.offer_id && !(allowedIds.has(ing.offer_id) && offersById[ing.offer_id])) ing.offer_id = null;
+    }
+    if (r.main_offer_id && !allowedIds.has(r.main_offer_id)) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
+    if (!r.main_offer_id) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
+    const v = recipeViolations(r, prefs, offersById);
+    if (!r.ingredients.length) v.push({ type: "form", id: "ingredients", label: "Receptet saknar ingredienser" });
+    if (!r.steps.length) v.push({ type: "form", id: "steps", label: "Receptet saknar instruktioner" });
+    return { recipe: r, violations: v };
+  }
+
+  const describeViolations = v => [...new Set(v.map(x => x.ingredient ? `${x.label} (${x.ingredient})` : x.label))].join("; ");
+
+  /* Kopierar de fält planen behöver från de erbjudanden den använder, så att planen går att visa och
+     räkna på även när veckans data byts ut. */
+  function snapshotOffers(plan, offersById) {
+    const out = {};
+    for (const s of plan.slots || []) {
+      const r = s.recipe; if (!r) continue;
+      for (const id of [r.main_offer_id, ...r.ingredients.map(i => i.offer_id)]) {
+        const o = id && offersById[id];
+        if (o && !out[id]) out[id] = { id: o.id, s: o.s, sv: o.sv || null, n: o.n, c: o.c, p: o.p, pp: o.pp || null, up: o.up || null, uu: o.uu || null, f: o.f, t: o.t, im: o.im || 0, ik: o.ik || null };
+      }
+    }
+    return out;
+  }
+
+  /* Kör asynkrona jobb med högst `limit` samtidigt (för parallella Claude-anrop). */
+  async function pool(items, limit, fn) {
+    const results = new Array(items.length); let next = 0;
+    async function worker() { while (next < items.length) { const i = next++; results[i] = await fn(items[i], i); } }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return results;
+  }
+
+  /* ------------------------------------------------------------------ */
 
   const Planner = {
     MEALS, DAYS, APPLIANCES, DIETS, VIBES, ALLERGENS, DISLIKES, PANTRY, PANTRY_TABS, STEPS,
@@ -760,6 +949,8 @@
     defaultPrefs, sanitizePrefs, stepValid, portionsPerMeal, mealsPerWeek, portionsPerWeek, budgetRange, mealCalorieTargets, slots,
     parseAmount, toBase, packSize, matchPantry, recipeCost, alternatives, shoppingList, planCost,
     createPrefStore,
+    PLAN_CATS, planOffers, planBudget, constraintsText, skeletonPrompt, recipesPrompt, singleRecipePrompt,
+    normalizeRecipe, checkRecipe, describeViolations, snapshotOffers, pool,
   };
   root.Planner = Planner;
   if (typeof module !== "undefined" && module.exports) module.exports = Planner;
