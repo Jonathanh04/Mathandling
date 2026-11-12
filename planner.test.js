@@ -278,6 +278,58 @@
     t("Förbättringar", "Snabbt nämns som krav i prompten", () => ok(P.constraintsText(quickP).includes("högst 30 minuter")));
     t("Förbättringar", "recept utan kampanjvara underkänns", () =>
       ok(P.checkRecipe({ ingredients: [{ name: "broccoli" }], steps: ["koka"], equipment: ["spis"] }, prefs({ appliances: ["spis"] }), pOffers, new Set(["b"])).violations.some(v => v.type === "kampanj")));
+    /* --- optimering: kvalitet, budget, matchning, hastighet --- */
+    const oP = prefs({ appliances: ["spis"], budget: 300, adults: 2, meals: ["dinner"], days: ["mon", "tue", "wed"] });
+    const qOffers = { ...pOffers, k: offer("k", "netto", "Kycklingbröstfilé", "kott"), s: offer("s", "netto", "Sill i lake", "fisk"), o: offer("o", "lidl", "Milbona riven ost", "ost") };
+    const qIds = new Set(Object.keys(qOffers));
+    t("Optimering", "rimlig koppling: kyckling ~ Kycklingbröstfilé", () => ok(P.linkPlausible("kyckling", qOffers.k)));
+    t("Optimering", "rimlig koppling: riven ost ~ Milbona riven ost", () => ok(P.linkPlausible("riven ost", qOffers.o)));
+    t("Optimering", "orimlig koppling: räkor ≠ Sill i lake", () => ok(!P.linkPlausible("räkor", qOffers.s)));
+    t("Optimering", "orimlig koppling tas bort och rapporteras", () => {
+      const r = P.checkRecipe({ ingredients: [{ name: "räkor", offer_id: "s", est_price: 40 }, { name: "broccoli", offer_id: "b" }], steps: ["koka"], equipment: ["spis"] }, oP, qOffers, qIds);
+      eq([r.recipe.ingredients[0].offer_id, r.recipe.ingredients[0].est_price, r.unlinked.length], [null, 40, 1]);
+    });
+    t("Optimering", "vatten tas bort ur ingredienserna", () =>
+      eq(P.normalizeRecipe({ ingredients: [{ name: "vatten till riset", amount: "3 dl" }, { name: "Vatten" }, { name: "vattenmelon" }, { name: "ris" }] }, oP).ingredients.map(i => i.name), ["vattenmelon", "ris"]));
+    t("Optimering", "middag utan grönsaker underkänns", () => {
+      const r = P.checkRecipe({ ingredients: [{ name: "kyckling", offer_id: "k" }, { name: "ris" }], steps: ["stek"], equipment: ["spis"] }, oP, qOffers, qIds, { meal: "dinner" });
+      ok(r.violations.some(v => v.id === "veg"));
+    });
+    t("Optimering", "middag med grönsak godkänns", () => {
+      const r = P.checkRecipe({ ingredients: [{ name: "kyckling", offer_id: "k" }, { name: "ris" }, { name: "broccoli", offer_id: "b" }], steps: ["stek"], equipment: ["spis"] }, oP, qOffers, qIds, { meal: "dinner" });
+      eq(r.violations, []);
+    });
+    t("Optimering", "frukost behöver inga grönsaker", () => {
+      const r = P.checkRecipe({ ingredients: [{ name: "kyckling", offer_id: "k" }], steps: ["stek"], equipment: ["spis"] }, oP, qOffers, qIds, { meal: "breakfast" });
+      ok(!r.violations.some(v => v.id === "veg"));
+    });
+    t("Optimering", "för dyr rätt underkänns", () => {
+      const r = P.checkRecipe({ ingredients: [{ name: "oxfilé", est_price: 600 }, { name: "broccoli", offer_id: "b" }], steps: ["stek"], equipment: ["spis"] }, oP, qOffers, qIds, { meal: "dinner", maxPortionCost: 40 });
+      ok(r.violations.some(v => v.type === "budget"));
+    });
+    t("Optimering", "rätt inom budget godkänns", () => {
+      const r = P.checkRecipe({ ingredients: [{ name: "ris", est_price: 10 }, { name: "broccoli", offer_id: "b" }], steps: ["koka"], equipment: ["spis"] }, oP, qOffers, qIds, { meal: "dinner", maxPortionCost: 40 });
+      ok(!r.violations.some(v => v.type === "budget"));
+    });
+    t("Optimering", "kompakta erbjudanderader: storlek i stället för hela beskrivningen", () => {
+      const line = P.offerLines([{ id: "a", s: "netto", sv: "Kycklingfilé", n: "Kyllingefilet", p: 49, up: 98, uu: "kg", d: "Dansk. 500 g. Frit valg mellem flere varianter, se butikken" }], { netto: { name: "Netto" } });
+      eq(line, "a|Netto|Kycklingfilé|49|98/kg|500 g");
+    });
+    t("Optimering", "bantad lista behåller rätternas varor och lägger till tillbehör", () => {
+      const offs = [offer("k", "netto", "Kycklingfilé", "kott"), offer("f", "netto", "Fläskkarré", "kott"), offer("b", "netto", "Broccoli", "gront"),
+        offer("g", "netto", "Läsk", "dryck"), offer("t", "netto", "Torsk", "fisk")];
+      const ids = P.trimOffers(offs, [{ title: "Torsk med broccoli", main_offer_ids: ["k"] }]).map(o => o.id).sort();
+      eq(ids, ["b", "k", "t"]);
+    });
+    t("Optimering", "bantad lista utan utvalda varor tar med proteiner", () => {
+      const offs = [offer("k", "netto", "Kycklingfilé", "kott"), offer("b", "netto", "Broccoli", "gront"), offer("g", "netto", "Läsk", "dryck")];
+      eq(P.trimOffers(offs, [{ title: "Något gott" }]).map(o => o.id), ["k", "b"]);
+    });
+    t("Optimering", "snabbläget ber om alla recept i ett svar", () => {
+      const sl = P.planSlots(oP, new Date("2026-11-16T09:00:00"));
+      const pr = P.directPrompt({ prefs: oP, offers: [offer("k", "netto", "Kycklingfilé", "kott")], stores: { netto: { name: "Netto" } }, slots: sl.map((x, i) => ({ ...x, i })) });
+      ok(pr.includes('"recipes"') && pr.includes("Måndag") && pr.includes("k|Netto|Kycklingfilé"));
+    });
     const batchP = prefs({ vibes: ["batch"], meals: ["dinner"], days: ["mon", "wed"], adults: 2 });
     const MON = new Date("2026-11-16T09:00:00");
     t("Förbättringar", "Matlåda: middag i dubbel sats och lunch dagen efter", () => {

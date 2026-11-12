@@ -697,6 +697,8 @@
       .map(part => part.split(/[^a-zåäöæø]+/).filter(w => w.length >= 3 && !STOP.has(w)).pop())
       .filter(Boolean);
   }
+  // Innehållsord (minst 4 bokstäver, inte stoppord) för att jämföra namn
+  const keyWords = t => normalize(t).replace(/\([^)]*\)/g, " ").split(/[^a-zåäöæø]+/).filter(w => w.length >= 4 && !STOP.has(w));
   // samma huvudord, eller ett sammansatt ord som slutar på det andra (grönlandsräkor ~ räkor)
   const sameHead = (a, b) => a === b || (Math.min(a.length, b.length) >= 5 && (a.endsWith(b) || b.endsWith(a)));
   // Ord som ändrar vad varan är (krossade tomater ≠ färska tomater): måste finnas i båda namnen
@@ -895,8 +897,32 @@
     return lines.filter(Boolean).join("\n");
   }
 
+  // Storleken ur beskrivningen ("400 g", "1,5-2 kg", "6 stk."), resten av beskrivningen behövs inte för planeringen
+  const sizeOf = d => { const m = String(d || "").match(/\d+(?:[.,]\d+)?(?:\s?[-–]\s?\d+(?:[.,]\d+)?)?\s?(?:kg|g|ml|cl|l|liter|stk\.?|st|pk)(?![a-zåäöæø])/i); return m ? m[0] : ""; };
+  const OFFER_HEAD = "offer_id|butik|vara|pris kr|jämförpris|storlek";
   function offerLines(offers, stores) {
-    return offers.map(o => `${o.id}|${(stores[o.s] || {}).name || o.s}|${o.sv || o.n}|${o.p} kr${o.up ? ` (${o.up} kr/${o.uu})` : ""}|${String(o.d || "").slice(0, 60)}`).join("\n");
+    return offers.map(o => `${o.id}|${(stores[o.s] || {}).name || o.s}|${o.sv || o.n}|${o.p}|${o.up ? `${o.up}/${o.uu}` : ""}|${sizeOf(o.d)}`).join("\n");
+  }
+
+  /* Bantad lista till receptanropen: rätternas utvalda kampanjvaror, varor vars namn liknar rätterna, och de
+     billigaste grönsakerna, frukterna, mejeri-, ost- och torrvarorna som tillbehör. Färre tecken = snabbare svar. */
+  const SUPPORT_ORDER = ["gront", "frukt", "mejeri", "ost", "torr", "brod", "fryst"];
+  function trimOffers(offers, items, cap = 90) {
+    const keep = new Map(), byId = Object.fromEntries(offers.map(o => [o.id, o]));
+    for (const s of items) for (const id of s.main_offer_ids || []) if (byId[id]) keep.set(id, byId[id]);
+    const words = new Set(items.flatMap(s => keyWords(`${s.title || ""} ${s.idea || ""}`)));
+    for (const o of offers) if (keep.size < cap && keyWords(`${o.sv || ""} ${o.n}`).some(w => words.has(w))) keep.set(o.id, o);
+    // utan utvalda varor (t.ex. "Byt") behövs också proteinerna att välja bland
+    const order = items.some(s => (s.main_offer_ids || []).length) ? SUPPORT_ORDER : ["kott", "fisk", "chark", ...SUPPORT_ORDER];
+    const support = offers.filter(o => !keep.has(o.id) && order.includes(o.c))
+      .sort((a, b) => order.indexOf(a.c) - order.indexOf(b.c) || a.p - b.p);
+    const perCat = {};
+    for (const o of support) {
+      if (keep.size >= cap) break;
+      perCat[o.c] = (perCat[o.c] || 0) + 1;
+      if (perCat[o.c] <= Math.ceil(cap / (order.length > SUPPORT_ORDER.length ? 6 : 4))) keep.set(o.id, o);
+    }
+    return [...keep.values()];
   }
 
   /* Steg 1: veckans skiss. Claude ser alla platser och hela erbjudandelistan på en gång. */
@@ -922,11 +948,53 @@ ${slotLines}
 Svara ENDAST med JSON:
 {"tip":"en mening om hur veckan sparar pengar och minskar svinn","slots":[{"i":0,"title":"...","idea":"kort beskrivning","main_offer_ids":["ID1","ID2"],"same_as":null}]}
 
-Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+Kampanjvaror som gäller idag (${OFFER_HEAD}):
 ${offerLines(offers, stores)}`;
   }
 
   /* Steg 2: fullständiga recept för några av platserna, med skissen som sammanhang. */
+  // Gemensamma regler för hur ett recept ska se ut
+  function recipeRules(prefs) {
+    const b = planBudget(prefs);
+    return `- Svenska, metriska mått (g, ml, dl, msk, tsk, st). 4–8 korta, konkreta steg.
+- Lunch och middag ska vara en balanserad tallrik: protein + kolhydrat/stärkelse + minst en grönsak (sikta på ca 150 g grönsaker per vuxen portion). Frukost och mellanmål får vara enklare.
+- Rimliga mängder per vuxen portion: kött, fisk eller kyckling 125–175 g; pasta eller ris (torrt) 70–90 g; potatis 200–250 g.
+- Kostnad per portion: ungefär ${Object.entries(b.perMeal).map(([m, k]) => `${mealLabel(m).toLowerCase()} ${k} kr`).join(", ")}. Använd budgeten till mättande och god mat – en rätt får gärna vara lite billigare, men inte tunn.
+- Lista inte vatten som ingrediens.
+- Varje ingrediens: "offer_id" om den köps som en av kampanjvarorna nedan (bara om varan verkligen är samma sak), annars null. "est_price" = uppskattat normalt danskt butikspris i kr för den mängd som används (även för kampanjvaror, som reserv). "pantry": true för salt, peppar, olja och torra kryddor.
+- "equipment" = de apparater som behövs, bara bland: ${prefs.appliances.join(", ")}.
+- "kcal", "protein", "carbs", "fat" = uppskattning per vuxen portion. "prep_min" + "cook_min" = "time_min".
+- "main_offer_id" = kampanjvaran som är rättens huvudråvara (för bild).`;
+  }
+
+  const RECIPE_JSON = prefs => `{"i":0,"title":"...","description":"en mening","prep_min":10,"cook_min":15,"time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["...","..."]}`;
+
+  /* Snabbläget: få måltider → skiss och recept i ett enda anrop. */
+  function directPrompt({ prefs, offers, stores, slots: sl }) {
+    const lines = sl.map(s => `${s.i}: ${dayLabel(s.day)} ${s.date} – ${mealLabel(s.meal)}${s.mult === 2 ? " (dubbel sats, hälften blir matlåda)" : ""}`).join("\n");
+    return `Du planerar en veckomatsedel och skriver recepten för ett hushåll i Köpenhamn som handlar i: ${[...new Set(offers.map(o => (stores[o.s] || {}).name))].join(", ")}.
+
+Krav:
+${constraintsText(prefs)}
+
+Planering:
+- Bygg på kampanjvarorna i listan så att veckan blir billig men god och inom budget.
+- Återanvänd råvaror mellan rätterna så att förpackningar tar slut och inget blir över.
+- Variera proteiner, kök och tillagning.
+
+Regler för recepten:
+${recipeRules(prefs)}
+
+Skriv ett fullständigt recept för varje plats:
+${lines}
+
+Svara ENDAST med JSON:
+{"tip":"en mening om hur veckan sparar pengar och minskar svinn","recipes":[${RECIPE_JSON(prefs)}]}
+
+Kampanjvaror som gäller idag (${OFFER_HEAD}):
+${offerLines(offers, stores)}`;
+  }
+
   function recipesPrompt({ prefs, offers, stores, skeleton, items }) {
     const plan = skeleton.map(s => `${s.i}: ${dayLabel(s.day)} ${mealLabel(s.meal)} – ${s.title}${s.same_as != null ? ` (samma som ${s.same_as})` : ""}`).join("\n");
     const want = items.map(s => `${s.i}: ${mealLabel(s.meal)} – ${s.title}. ${s.idea || ""}${(s.main_offer_ids || []).length ? ` Bygger på: ${s.main_offer_ids.join(", ")}.` : ""}`).join("\n");
@@ -942,16 +1010,12 @@ Skriv fullständiga recept för de här platserna:
 ${want}
 
 Regler för recepten:
-- Svenska, metriska mått (g, ml, dl, msk, tsk, st). 4–8 korta steg.
-- Varje ingrediens: "offer_id" om den köps som en av kampanjvarorna nedan, annars null. "est_price" = uppskattat normalt danskt butikspris i kr för den mängd som används (även för kampanjvaror, som reserv). "pantry": true för salt, peppar, olja, vatten och torra kryddor.
-- "equipment" = de apparater som behövs, bara bland: ${prefs.appliances.join(", ")}.
-- "kcal", "protein", "carbs", "fat" = uppskattning per vuxen portion.
-- "main_offer_id" = kampanjvaran som är rättens huvudråvara (för bild), eller null.
+${recipeRules(prefs)}
 
 Svara ENDAST med JSON:
-{"recipes":[{"i":0,"title":"...","description":"en mening","prep_min":10,"cook_min":15,"time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["...","..."]}]}
+{"recipes":[${RECIPE_JSON(prefs)}]}
 
-Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+Kampanjvaror som gäller idag (${OFFER_HEAD}):
 ${offerLines(offers, stores)}`;
   }
 
@@ -965,12 +1029,13 @@ ${constraintsText(prefs)}
 
 ${plan ? `Resten av veckan (återanvänd gärna råvaror härifrån):\n${plan}\n\n` : ""}Platsen: ${dayLabel(slot.day)} ${slot.date} – ${mealLabel(slot.meal)}.
 ${avoidTitles.length ? `Föreslå INTE något av detta: ${avoidTitles.join("; ")}.\n` : ""}${problem ? `Det förra förslaget underkändes: ${problem}. Undvik det helt.\n` : ""}
-Samma regler som för övriga recept: svenska, metriska mått, offer_id eller null, est_price för varje ingrediens, pantry för basvaror, equipment bara bland ${prefs.appliances.join(", ")}, kcal/protein/carbs/fat per vuxen portion, main_offer_id.
+Regler för receptet:
+${recipeRules(prefs)}
 
 Svara ENDAST med JSON:
 {"recipe":{"title":"...","description":"en mening","prep_min":10,"cook_min":15,"time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"...","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["..."]}}
 
-Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+Kampanjvaror som gäller idag (${OFFER_HEAD}):
 ${offerLines(offers, stores)}`;
   }
 
@@ -985,7 +1050,7 @@ ${offerLines(offers, stores)}`;
       offer_id: i && i.offer_id ? String(i.offer_id) : null,
       est_price: num(i && i.est_price, 0, 500) || 0,
       pantry: !!(i && i.pantry),
-    })).filter(i => i.name);
+    })).filter(i => i.name && !/^(kran)?vatten(\s|$)/i.test(i.name.trim()));
     return {
       title: str(raw.title, 80) || "Namnlös rätt",
       description: str(raw.description, 200),
@@ -1002,10 +1067,28 @@ ${offerLines(offers, stores)}`;
 
   /* Kontrollerar ett recept: kopplingar till varor som inte får användas tas bort (ingrediensen blir
      uppskattad i stället), och alla hårda krav prövas. Returnerar { recipe, violations }. */
-  function checkRecipe(raw, prefs, offersById, allowedIds) {
+  /* Är kopplingen ingrediens → kampanjvara rimlig? Kräver ett gemensamt ord (eller sammansatt ord som börjar
+     eller slutar på det andra), t.ex. "kycklingklubbor" ~ "Kycklingklubbor", "lax" ~ "Laxfilé", "riven ost" ~ "Milbona riven ost". */
+  function linkPlausible(name, o) {
+    const words = t => normalize(t).split(/[^a-zåäöæø]+/).filter(w => w.length >= 3 && !STOP.has(w));
+    const a = words(name), b = words(`${o.sv || ""} ${o.n || ""}`);
+    // hela ordet ingår i det andra: kyckling ~ kycklingbröstfilé, lax ~ laxfilé (men kycklingbuljong ≠ kycklingfilé)
+    return a.some(x => b.some(y => x === y || y.startsWith(x) || y.endsWith(x) || x.startsWith(y) || x.endsWith(y)));
+  }
+
+  // Grönsaker, frukt och baljväxter (lök och vitlök räknas inte som grönsaksportion)
+  const VEGGIES = rule(["tomat", "gurka", "paprika", "morot", "morötter", "broccoli", "blomkål", "kål" + E, "vitkål", "rödkål", "spetskål",
+    "grönkål", "salladskål", "spenat", "sallad", "ruccola", "rucola", "zucchini", "squash", "aubergine", "svamp", "champinjon", "ärtor", "sockerärt",
+    "bönor", "haricots", "majs", "purjo", "selleri", "rödbet", "betor", "sötpotatis", "pumpa", "sparris", "palsternack", "rotfrukt",
+    "grönsak", "wokmix", "avokado", "äpple", "päron", B + "bär", "bär" + E, "citrus", "apelsin", "mango", "ananas", "linser", "kikärt",
+    "edamame", "bladspenat", "fänkål", "rädis", "kålrabbi", "gurk", "oliver", "chili", "tomatpuré", "krossade tomater", "passata"]);
+
+  function checkRecipe(raw, prefs, offersById, allowedIds, opts = {}) {
     const r = normalizeRecipe(raw, prefs);
+    const unlinked = [];
     for (const ing of r.ingredients) {
       if (ing.offer_id && !(allowedIds.has(ing.offer_id) && offersById[ing.offer_id])) ing.offer_id = null;
+      if (ing.offer_id && !linkPlausible(ing.name, offersById[ing.offer_id])) { unlinked.push(`${ing.name} ≠ ${offersById[ing.offer_id].sv || offersById[ing.offer_id].n}`); ing.offer_id = null; }
     }
     if (r.main_offer_id && !allowedIds.has(r.main_offer_id)) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
     if (!r.main_offer_id) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
@@ -1013,9 +1096,15 @@ ${offerLines(offers, stores)}`;
     const lim = timeLimit(prefs);
     if (lim && r.time_min && r.time_min > lim) v.push({ type: "tid", id: "quick", label: `tar ${r.time_min} min, högst ${lim} min med Snabbt & enkelt` });
     if (!r.ingredients.some(i => i.offer_id)) v.push({ type: "kampanj", id: "none", label: "bygger inte på någon kampanjvara ur listan" });
+    if ((opts.meal === "lunch" || opts.meal === "dinner") && !r.ingredients.some(i => matches(`${i.name} ${(offersById[i.offer_id] || {}).sv || ""}`, VEGGIES)))
+      v.push({ type: "kvalitet", id: "veg", label: "saknar grönsaker" });
+    if (opts.maxPortionCost) {
+      const c = recipeCost(r, prefs, offersById);
+      if (c.perPortion > opts.maxPortionCost * 1.5) v.push({ type: "budget", id: "dyr", label: `kostar ca ${Math.round(c.perPortion)} kr per portion, budgeten är ca ${Math.round(opts.maxPortionCost)} kr` });
+    }
     if (!r.ingredients.length) v.push({ type: "form", id: "ingredients", label: "Receptet saknar ingredienser" });
     if (!r.steps.length) v.push({ type: "form", id: "steps", label: "Receptet saknar instruktioner" });
-    return { recipe: r, violations: v };
+    return { recipe: r, violations: v, unlinked };
   }
 
   const describeViolations = v => [...new Set(v.map(x => x.ingredient ? `${x.label} (${x.ingredient})` : x.label))].join("; ");
@@ -1052,7 +1141,7 @@ ${offerLines(offers, stores)}`;
     createPrefStore,
     PLAN_CATS, planOffers, planBudget, constraintsText, skeletonPrompt, recipesPrompt, singleRecipePrompt,
     normalizeRecipe, checkRecipe, describeViolations, snapshotOffers, pool, scaleAmount, macroShares, recipeKey,
-    planSlots, timeLimit, offerShare,
+    planSlots, timeLimit, offerShare, offerLines, trimOffers, directPrompt, linkPlausible,
   };
   root.Planner = Planner;
   if (typeof module !== "undefined" && module.exports) module.exports = Planner;

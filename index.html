@@ -1436,6 +1436,8 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
       .map(part => part.split(/[^a-zåäöæø]+/).filter(w => w.length >= 3 && !STOP.has(w)).pop())
       .filter(Boolean);
   }
+  // Innehållsord (minst 4 bokstäver, inte stoppord) för att jämföra namn
+  const keyWords = t => normalize(t).replace(/\([^)]*\)/g, " ").split(/[^a-zåäöæø]+/).filter(w => w.length >= 4 && !STOP.has(w));
   // samma huvudord, eller ett sammansatt ord som slutar på det andra (grönlandsräkor ~ räkor)
   const sameHead = (a, b) => a === b || (Math.min(a.length, b.length) >= 5 && (a.endsWith(b) || b.endsWith(a)));
   // Ord som ändrar vad varan är (krossade tomater ≠ färska tomater): måste finnas i båda namnen
@@ -1634,8 +1636,32 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
     return lines.filter(Boolean).join("\n");
   }
 
+  // Storleken ur beskrivningen ("400 g", "1,5-2 kg", "6 stk."), resten av beskrivningen behövs inte för planeringen
+  const sizeOf = d => { const m = String(d || "").match(/\d+(?:[.,]\d+)?(?:\s?[-–]\s?\d+(?:[.,]\d+)?)?\s?(?:kg|g|ml|cl|l|liter|stk\.?|st|pk)(?![a-zåäöæø])/i); return m ? m[0] : ""; };
+  const OFFER_HEAD = "offer_id|butik|vara|pris kr|jämförpris|storlek";
   function offerLines(offers, stores) {
-    return offers.map(o => `${o.id}|${(stores[o.s] || {}).name || o.s}|${o.sv || o.n}|${o.p} kr${o.up ? ` (${o.up} kr/${o.uu})` : ""}|${String(o.d || "").slice(0, 60)}`).join("\n");
+    return offers.map(o => `${o.id}|${(stores[o.s] || {}).name || o.s}|${o.sv || o.n}|${o.p}|${o.up ? `${o.up}/${o.uu}` : ""}|${sizeOf(o.d)}`).join("\n");
+  }
+
+  /* Bantad lista till receptanropen: rätternas utvalda kampanjvaror, varor vars namn liknar rätterna, och de
+     billigaste grönsakerna, frukterna, mejeri-, ost- och torrvarorna som tillbehör. Färre tecken = snabbare svar. */
+  const SUPPORT_ORDER = ["gront", "frukt", "mejeri", "ost", "torr", "brod", "fryst"];
+  function trimOffers(offers, items, cap = 90) {
+    const keep = new Map(), byId = Object.fromEntries(offers.map(o => [o.id, o]));
+    for (const s of items) for (const id of s.main_offer_ids || []) if (byId[id]) keep.set(id, byId[id]);
+    const words = new Set(items.flatMap(s => keyWords(`${s.title || ""} ${s.idea || ""}`)));
+    for (const o of offers) if (keep.size < cap && keyWords(`${o.sv || ""} ${o.n}`).some(w => words.has(w))) keep.set(o.id, o);
+    // utan utvalda varor (t.ex. "Byt") behövs också proteinerna att välja bland
+    const order = items.some(s => (s.main_offer_ids || []).length) ? SUPPORT_ORDER : ["kott", "fisk", "chark", ...SUPPORT_ORDER];
+    const support = offers.filter(o => !keep.has(o.id) && order.includes(o.c))
+      .sort((a, b) => order.indexOf(a.c) - order.indexOf(b.c) || a.p - b.p);
+    const perCat = {};
+    for (const o of support) {
+      if (keep.size >= cap) break;
+      perCat[o.c] = (perCat[o.c] || 0) + 1;
+      if (perCat[o.c] <= Math.ceil(cap / (order.length > SUPPORT_ORDER.length ? 6 : 4))) keep.set(o.id, o);
+    }
+    return [...keep.values()];
   }
 
   /* Steg 1: veckans skiss. Claude ser alla platser och hela erbjudandelistan på en gång. */
@@ -1661,11 +1687,53 @@ ${slotLines}
 Svara ENDAST med JSON:
 {"tip":"en mening om hur veckan sparar pengar och minskar svinn","slots":[{"i":0,"title":"...","idea":"kort beskrivning","main_offer_ids":["ID1","ID2"],"same_as":null}]}
 
-Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+Kampanjvaror som gäller idag (${OFFER_HEAD}):
 ${offerLines(offers, stores)}`;
   }
 
   /* Steg 2: fullständiga recept för några av platserna, med skissen som sammanhang. */
+  // Gemensamma regler för hur ett recept ska se ut
+  function recipeRules(prefs) {
+    const b = planBudget(prefs);
+    return `- Svenska, metriska mått (g, ml, dl, msk, tsk, st). 4–8 korta, konkreta steg.
+- Lunch och middag ska vara en balanserad tallrik: protein + kolhydrat/stärkelse + minst en grönsak (sikta på ca 150 g grönsaker per vuxen portion). Frukost och mellanmål får vara enklare.
+- Rimliga mängder per vuxen portion: kött, fisk eller kyckling 125–175 g; pasta eller ris (torrt) 70–90 g; potatis 200–250 g.
+- Kostnad per portion: ungefär ${Object.entries(b.perMeal).map(([m, k]) => `${mealLabel(m).toLowerCase()} ${k} kr`).join(", ")}. Använd budgeten till mättande och god mat – en rätt får gärna vara lite billigare, men inte tunn.
+- Lista inte vatten som ingrediens.
+- Varje ingrediens: "offer_id" om den köps som en av kampanjvarorna nedan (bara om varan verkligen är samma sak), annars null. "est_price" = uppskattat normalt danskt butikspris i kr för den mängd som används (även för kampanjvaror, som reserv). "pantry": true för salt, peppar, olja och torra kryddor.
+- "equipment" = de apparater som behövs, bara bland: ${prefs.appliances.join(", ")}.
+- "kcal", "protein", "carbs", "fat" = uppskattning per vuxen portion. "prep_min" + "cook_min" = "time_min".
+- "main_offer_id" = kampanjvaran som är rättens huvudråvara (för bild).`;
+  }
+
+  const RECIPE_JSON = prefs => `{"i":0,"title":"...","description":"en mening","prep_min":10,"cook_min":15,"time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["...","..."]}`;
+
+  /* Snabbläget: få måltider → skiss och recept i ett enda anrop. */
+  function directPrompt({ prefs, offers, stores, slots: sl }) {
+    const lines = sl.map(s => `${s.i}: ${dayLabel(s.day)} ${s.date} – ${mealLabel(s.meal)}${s.mult === 2 ? " (dubbel sats, hälften blir matlåda)" : ""}`).join("\n");
+    return `Du planerar en veckomatsedel och skriver recepten för ett hushåll i Köpenhamn som handlar i: ${[...new Set(offers.map(o => (stores[o.s] || {}).name))].join(", ")}.
+
+Krav:
+${constraintsText(prefs)}
+
+Planering:
+- Bygg på kampanjvarorna i listan så att veckan blir billig men god och inom budget.
+- Återanvänd råvaror mellan rätterna så att förpackningar tar slut och inget blir över.
+- Variera proteiner, kök och tillagning.
+
+Regler för recepten:
+${recipeRules(prefs)}
+
+Skriv ett fullständigt recept för varje plats:
+${lines}
+
+Svara ENDAST med JSON:
+{"tip":"en mening om hur veckan sparar pengar och minskar svinn","recipes":[${RECIPE_JSON(prefs)}]}
+
+Kampanjvaror som gäller idag (${OFFER_HEAD}):
+${offerLines(offers, stores)}`;
+  }
+
   function recipesPrompt({ prefs, offers, stores, skeleton, items }) {
     const plan = skeleton.map(s => `${s.i}: ${dayLabel(s.day)} ${mealLabel(s.meal)} – ${s.title}${s.same_as != null ? ` (samma som ${s.same_as})` : ""}`).join("\n");
     const want = items.map(s => `${s.i}: ${mealLabel(s.meal)} – ${s.title}. ${s.idea || ""}${(s.main_offer_ids || []).length ? ` Bygger på: ${s.main_offer_ids.join(", ")}.` : ""}`).join("\n");
@@ -1681,16 +1749,12 @@ Skriv fullständiga recept för de här platserna:
 ${want}
 
 Regler för recepten:
-- Svenska, metriska mått (g, ml, dl, msk, tsk, st). 4–8 korta steg.
-- Varje ingrediens: "offer_id" om den köps som en av kampanjvarorna nedan, annars null. "est_price" = uppskattat normalt danskt butikspris i kr för den mängd som används (även för kampanjvaror, som reserv). "pantry": true för salt, peppar, olja, vatten och torra kryddor.
-- "equipment" = de apparater som behövs, bara bland: ${prefs.appliances.join(", ")}.
-- "kcal", "protein", "carbs", "fat" = uppskattning per vuxen portion.
-- "main_offer_id" = kampanjvaran som är rättens huvudråvara (för bild), eller null.
+${recipeRules(prefs)}
 
 Svara ENDAST med JSON:
-{"recipes":[{"i":0,"title":"...","description":"en mening","prep_min":10,"cook_min":15,"time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["...","..."]}]}
+{"recipes":[${RECIPE_JSON(prefs)}]}
 
-Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+Kampanjvaror som gäller idag (${OFFER_HEAD}):
 ${offerLines(offers, stores)}`;
   }
 
@@ -1704,12 +1768,13 @@ ${constraintsText(prefs)}
 
 ${plan ? `Resten av veckan (återanvänd gärna råvaror härifrån):\n${plan}\n\n` : ""}Platsen: ${dayLabel(slot.day)} ${slot.date} – ${mealLabel(slot.meal)}.
 ${avoidTitles.length ? `Föreslå INTE något av detta: ${avoidTitles.join("; ")}.\n` : ""}${problem ? `Det förra förslaget underkändes: ${problem}. Undvik det helt.\n` : ""}
-Samma regler som för övriga recept: svenska, metriska mått, offer_id eller null, est_price för varje ingrediens, pantry för basvaror, equipment bara bland ${prefs.appliances.join(", ")}, kcal/protein/carbs/fat per vuxen portion, main_offer_id.
+Regler för receptet:
+${recipeRules(prefs)}
 
 Svara ENDAST med JSON:
 {"recipe":{"title":"...","description":"en mening","prep_min":10,"cook_min":15,"time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"...","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["..."]}}
 
-Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
+Kampanjvaror som gäller idag (${OFFER_HEAD}):
 ${offerLines(offers, stores)}`;
   }
 
@@ -1724,7 +1789,7 @@ ${offerLines(offers, stores)}`;
       offer_id: i && i.offer_id ? String(i.offer_id) : null,
       est_price: num(i && i.est_price, 0, 500) || 0,
       pantry: !!(i && i.pantry),
-    })).filter(i => i.name);
+    })).filter(i => i.name && !/^(kran)?vatten(\s|$)/i.test(i.name.trim()));
     return {
       title: str(raw.title, 80) || "Namnlös rätt",
       description: str(raw.description, 200),
@@ -1741,10 +1806,28 @@ ${offerLines(offers, stores)}`;
 
   /* Kontrollerar ett recept: kopplingar till varor som inte får användas tas bort (ingrediensen blir
      uppskattad i stället), och alla hårda krav prövas. Returnerar { recipe, violations }. */
-  function checkRecipe(raw, prefs, offersById, allowedIds) {
+  /* Är kopplingen ingrediens → kampanjvara rimlig? Kräver ett gemensamt ord (eller sammansatt ord som börjar
+     eller slutar på det andra), t.ex. "kycklingklubbor" ~ "Kycklingklubbor", "lax" ~ "Laxfilé", "riven ost" ~ "Milbona riven ost". */
+  function linkPlausible(name, o) {
+    const words = t => normalize(t).split(/[^a-zåäöæø]+/).filter(w => w.length >= 3 && !STOP.has(w));
+    const a = words(name), b = words(`${o.sv || ""} ${o.n || ""}`);
+    // hela ordet ingår i det andra: kyckling ~ kycklingbröstfilé, lax ~ laxfilé (men kycklingbuljong ≠ kycklingfilé)
+    return a.some(x => b.some(y => x === y || y.startsWith(x) || y.endsWith(x) || x.startsWith(y) || x.endsWith(y)));
+  }
+
+  // Grönsaker, frukt och baljväxter (lök och vitlök räknas inte som grönsaksportion)
+  const VEGGIES = rule(["tomat", "gurka", "paprika", "morot", "morötter", "broccoli", "blomkål", "kål" + E, "vitkål", "rödkål", "spetskål",
+    "grönkål", "salladskål", "spenat", "sallad", "ruccola", "rucola", "zucchini", "squash", "aubergine", "svamp", "champinjon", "ärtor", "sockerärt",
+    "bönor", "haricots", "majs", "purjo", "selleri", "rödbet", "betor", "sötpotatis", "pumpa", "sparris", "palsternack", "rotfrukt",
+    "grönsak", "wokmix", "avokado", "äpple", "päron", B + "bär", "bär" + E, "citrus", "apelsin", "mango", "ananas", "linser", "kikärt",
+    "edamame", "bladspenat", "fänkål", "rädis", "kålrabbi", "gurk", "oliver", "chili", "tomatpuré", "krossade tomater", "passata"]);
+
+  function checkRecipe(raw, prefs, offersById, allowedIds, opts = {}) {
     const r = normalizeRecipe(raw, prefs);
+    const unlinked = [];
     for (const ing of r.ingredients) {
       if (ing.offer_id && !(allowedIds.has(ing.offer_id) && offersById[ing.offer_id])) ing.offer_id = null;
+      if (ing.offer_id && !linkPlausible(ing.name, offersById[ing.offer_id])) { unlinked.push(`${ing.name} ≠ ${offersById[ing.offer_id].sv || offersById[ing.offer_id].n}`); ing.offer_id = null; }
     }
     if (r.main_offer_id && !allowedIds.has(r.main_offer_id)) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
     if (!r.main_offer_id) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
@@ -1752,9 +1835,15 @@ ${offerLines(offers, stores)}`;
     const lim = timeLimit(prefs);
     if (lim && r.time_min && r.time_min > lim) v.push({ type: "tid", id: "quick", label: `tar ${r.time_min} min, högst ${lim} min med Snabbt & enkelt` });
     if (!r.ingredients.some(i => i.offer_id)) v.push({ type: "kampanj", id: "none", label: "bygger inte på någon kampanjvara ur listan" });
+    if ((opts.meal === "lunch" || opts.meal === "dinner") && !r.ingredients.some(i => matches(`${i.name} ${(offersById[i.offer_id] || {}).sv || ""}`, VEGGIES)))
+      v.push({ type: "kvalitet", id: "veg", label: "saknar grönsaker" });
+    if (opts.maxPortionCost) {
+      const c = recipeCost(r, prefs, offersById);
+      if (c.perPortion > opts.maxPortionCost * 1.5) v.push({ type: "budget", id: "dyr", label: `kostar ca ${Math.round(c.perPortion)} kr per portion, budgeten är ca ${Math.round(opts.maxPortionCost)} kr` });
+    }
     if (!r.ingredients.length) v.push({ type: "form", id: "ingredients", label: "Receptet saknar ingredienser" });
     if (!r.steps.length) v.push({ type: "form", id: "steps", label: "Receptet saknar instruktioner" });
-    return { recipe: r, violations: v };
+    return { recipe: r, violations: v, unlinked };
   }
 
   const describeViolations = v => [...new Set(v.map(x => x.ingredient ? `${x.label} (${x.ingredient})` : x.label))].join("; ");
@@ -1791,7 +1880,7 @@ ${offerLines(offers, stores)}`;
     createPrefStore,
     PLAN_CATS, planOffers, planBudget, constraintsText, skeletonPrompt, recipesPrompt, singleRecipePrompt,
     normalizeRecipe, checkRecipe, describeViolations, snapshotOffers, pool, scaleAmount, macroShares, recipeKey,
-    planSlots, timeLimit, offerShare,
+    planSlots, timeLimit, offerShare, offerLines, trimOffers, directPrompt, linkPlausible,
   };
   root.Planner = Planner;
   if (typeof module !== "undefined" && module.exports) module.exports = Planner;
@@ -2859,13 +2948,41 @@ async function generatePlan() {
   if (offers.length < 8) { toast("För få kampanjvaror i dina butiker som klarar kraven. Välj fler butiker."); return; }
   const allowedIds = new Set(offers.map(o => o.id));
   const byId = Object.fromEntries(offers.map(o => [o.id, o]));
-  const ctx = { prefs: p, offers, stores: DATA.stores };
+  const ctx = { prefs: p, offers, stores: DATA.stores, opts: slotOpts(p, now) };
   planCtl = new AbortController(); const signal = planCtl.signal;
   BUILD = { phase: "Planerar veckan …", done: 0, total: cookSl.length, error: null };
   go("plan");
+  // mätning: tid, antal anrop, promptstorlek och orimliga kopplingar som togs bort
+  const meta = { t0: Date.now(), calls: 0, promptKB: 0, unlinked: [] };
+  const ask = (prompt, o) => { meta.calls++; meta.promptKB += prompt.length / 1024; return sampleFn.json(prompt, o); };
+  const check = (r, i) => { const c = MP.checkRecipe(r, p, byId, allowedIds, ctx.opts(i, sl)); meta.unlinked.push(...c.unlinked); return c; };
+  ctx.ask = ask; ctx.check = check;
   try {
+    // Snabbläget: högst fyra rätter att laga → skiss och recept i ett enda anrop
+    if (cookSl.length <= 4) {
+      meta.mode = "direkt";
+      BUILD.phase = "Skriver veckans recept …";
+      const res = await ask(MP.directPrompt({ ...ctx, slots: cookSl }), { signal, cache: false }).catch(e => { if (e?.code === "cancelled") throw e; return null; });
+      const got = {};
+      for (const r of Array.isArray(res?.recipes) ? res.recipes : []) {
+        const i = Number(r?.i); if (!cookSl.some(c => c.i === i)) continue;
+        got[i] = { raw: r, ...check(r, i) };
+      }
+      const skeleton = sl.map(s => s.leftoverOf != null ? { ...s, title: "Matlåda", idea: "", main_offer_ids: [], same_as: null }
+        : { ...s, title: String(got[s.i]?.recipe?.title || "Rätt").slice(0, 80), idea: String(got[s.i]?.recipe?.description || "").slice(0, 200), main_offer_ids: [], same_as: null });
+      PLAN = newPlan(p, sl, skeleton, res?.tip);
+      for (const s of cookSl) {
+        if (got[s.i] && !got[s.i].violations.length) PLAN.slots[s.i].recipe = got[s.i].recipe;
+        else if (got[s.i]) PLAN.slots[s.i].problem = MP.describeViolations(got[s.i].violations);
+      }
+      BUILD.done = PLAN.slots.filter(s => s.recipe).length; renderPlan();
+      await fixMissing(cookSl, skeleton, ctx, byId, allowedIds, signal);
+      return await finishPlan(p, byId, allowedIds, skeleton, ctx, signal, meta);
+    }
+
     // 1. Skiss för hela veckan
-    const sk = await sampleFn.json(MP.skeletonPrompt({ ...ctx, slots: cookSl }), { signal, cache: false });
+    meta.mode = "skiss";
+    const sk = await ask(MP.skeletonPrompt({ ...ctx, slots: cookSl }), { signal, cache: false });
     const raw = Array.isArray(sk?.slots) ? sk.slots : [];
     const skeleton = sl.map(s => {
       if (s.leftoverOf != null) return { ...s, title: "Matlåda", idea: "", main_offer_ids: [], same_as: null };
@@ -2874,44 +2991,28 @@ async function generatePlan() {
       return { ...s, title: String(x.title || "").slice(0, 80) || "Rätt", idea: String(x.idea || "").slice(0, 200),
         main_offer_ids: (Array.isArray(x.main_offer_ids) ? x.main_offer_ids : []).map(String).filter(id => allowedIds.has(id)), same_as: same };
     });
-    PLAN = { v: 1, id: String(Date.now()), createdAt: Date.now(), status: "draft", start: sl[0].date, prefsAt: p.updatedAt,
-      tip: String(sk?.tip || "").slice(0, 240), skeleton, slots: sl.map(s => ({ i: s.i, day: s.day, date: s.date, meal: s.meal, recipe: null, title: skeleton[s.i].title,
-        ...(s.mult ? { mult: s.mult } : {}), ...(s.leftoverOf != null ? { leftoverOf: s.leftoverOf, extra: !!s.extra } : {}) })), offers: {} };
+    PLAN = newPlan(p, sl, skeleton, sk?.tip);
     BUILD.phase = "Skriver recepten …"; renderPlan();
 
-    // 2. Fullständiga recept, några i taget, högst två anrop samtidigt
+    // 2. Fullständiga recept, två i taget och tre anrop samtidigt. Varje anrop får bara de kampanjvaror
+    //    som rätterna behöver plus billiga tillbehör, så svaren kommer snabbare.
     const unique = skeleton.filter(s => s.same_as == null && s.leftoverOf == null);
-    const chunks = []; for (let k = 0; k < unique.length; k += 3) chunks.push(unique.slice(k, k + 3));
-    const place = (i, recipe) => {
-      PLAN.slots[i].recipe = recipe; PLAN.slots[i].error = null;
-      skeleton.filter(s => s.same_as === i).forEach(s => { PLAN.slots[s.i].recipe = recipe; PLAN.slots[s.i].error = null; });
-      BUILD.done = PLAN.slots.filter(s => s.recipe).length; renderPlan();   // matlådor räknas inte (de har inget eget recept)
-    };
-    await MP.pool(chunks, 2, async chunk => {
+    const chunks = []; for (let k = 0; k < unique.length; k += 2) chunks.push(unique.slice(k, k + 2));
+    await MP.pool(chunks, 3, async chunk => {
       let res;
-      try { res = await sampleFn.json(MP.recipesPrompt({ ...ctx, skeleton, items: chunk }), { signal, cache: false }); }
+      try { res = await ask(MP.recipesPrompt({ ...ctx, offers: MP.trimOffers(offers, chunk), skeleton, items: chunk }), { signal, cache: false }); }
       catch (e) { if (e?.code === "cancelled") throw e; return; }   // platserna fylls i av steg 3
       for (const r of Array.isArray(res?.recipes) ? res.recipes : []) {
         const i = Number(r?.i); if (!chunk.some(c => c.i === i)) continue;
-        const { recipe, violations } = MP.checkRecipe(r, p, byId, allowedIds);
-        if (!violations.length) place(i, recipe);
+        const { recipe, violations } = check(r, i);
+        if (!violations.length) placeRecipe(i, recipe, skeleton);
         else PLAN.slots[i].problem = MP.describeViolations(violations);
       }
     });
 
     // 3. Platser som saknar ett godkänt recept: ett nytt försök var, med förklaring av vad som var fel
-    const missing = unique.filter(s => !PLAN.slots[s.i].recipe);
-    if (missing.length) BUILD.phase = "Rättar recept som inte klarade kraven …";
-    await MP.pool(missing, 2, async s => {
-      const r = await singleRecipe(s, skeleton, ctx, byId, allowedIds, PLAN.slots[s.i].problem || "", signal);
-      if (r.recipe) place(s.i, r.recipe);
-      else { PLAN.slots[s.i].error = r.error; skeleton.filter(x => x.same_as === s.i).forEach(x => { PLAN.slots[x.i].error = r.error; }); }
-    });
-
-    PLAN.offers = MP.snapshotOffers(PLAN, byId);
-    BUILD = null; savePlan(); renderPlan();
-    const failed = PLAN.slots.filter(s => !s.recipe && s.leftoverOf == null).length;
-    toast(failed ? `Veckan är klar, men ${failed} rätter behöver ett nytt försök.` : "Din vecka är klar!");
+    await fixMissing(unique, skeleton, ctx, byId, allowedIds, signal);
+    await finishPlan(p, byId, allowedIds, skeleton, ctx, signal, meta);
   } catch (err) {
     const c = err?.code;
     BUILD = { ...(BUILD || {}), error: c === "cancelled" ? "Stoppat. Inget sparades." : errText(c) };
@@ -2921,14 +3022,71 @@ async function generatePlan() {
   }
 }
 
+function newPlan(p, sl, skeleton, tip) {
+  return { v: 1, id: String(Date.now()), createdAt: Date.now(), status: "draft", start: sl[0].date, prefsAt: p.updatedAt,
+    tip: String(tip || "").slice(0, 240), skeleton, slots: sl.map(s => ({ i: s.i, day: s.day, date: s.date, meal: s.meal, recipe: null, title: skeleton[s.i].title,
+      ...(s.mult ? { mult: s.mult } : {}), ...(s.leftoverOf != null ? { leftoverOf: s.leftoverOf, extra: !!s.extra } : {}) })), offers: {} };
+}
+function placeRecipe(i, recipe, skeleton) {
+  PLAN.slots[i].recipe = recipe; PLAN.slots[i].error = null; PLAN.slots[i].problem = null;
+  skeleton.filter(s => s.same_as === i).forEach(s => { PLAN.slots[s.i].recipe = recipe; PLAN.slots[s.i].error = null; });
+  if (BUILD) { BUILD.done = PLAN.slots.filter(s => s.recipe).length; renderPlan(); }   // matlådor räknas inte (de har inget eget recept)
+}
+// Kontrollkrav per plats: måltiden (grönsakskrav) och budgeten per portion
+function slotOpts(p, now) {
+  const b = MP.planBudget(p, now);
+  return (i, sl) => { const m = (sl || PLAN?.slots || [])[i]?.meal; return { meal: m, maxPortionCost: b.perMeal[m] || b.perPortion }; };
+}
+async function fixMissing(list, skeleton, ctx, byId, allowedIds, signal) {
+  const missing = list.filter(s => !PLAN.slots[s.i].recipe);
+  if (!missing.length) return;
+  BUILD.phase = "Rättar recept som inte klarade kraven …"; renderPlan();
+  await MP.pool(missing, 3, async s => {
+    const r = await singleRecipe(s, skeleton, ctx, byId, allowedIds, PLAN.slots[s.i].problem || "", signal);
+    if (r.recipe) placeRecipe(s.i, r.recipe, skeleton);
+    else { PLAN.slots[s.i].error = r.error; skeleton.filter(x => x.same_as === s.i).forEach(x => { PLAN.slots[x.i].error = r.error; }); }
+  });
+}
+/* Sista steget: över budget → den dyraste rätten görs om en gång, billigare. Sedan sparas planen med mätvärden. */
+async function finishPlan(p, byId, allowedIds, skeleton, ctx, signal, meta) {
+  PLAN.offers = MP.snapshotOffers(PLAN, byId);
+  const allowed = Object.values(byId);
+  let cost = MP.planCost(PLAN, p, PLAN.offers, allowed);
+  const budget = p.budget || MP.budgetRange(p).suggested;
+  if (cost.total > budget * 1.05) {
+    const costs = PLAN.slots.filter(s => s.recipe && s.leftoverOf == null && !skeleton.some(x => x.same_as === s.i))
+      .map(s => ({ s, c: MP.recipeCost(s.recipe, p, byId).total * (s.mult || 1) })).sort((a, b) => b.c - a.c);
+    const top = costs[0];
+    if (top) {
+      BUILD.phase = "Gör veckan billigare …"; renderPlan();
+      const over = Math.round(cost.total - budget);
+      const r = await singleRecipe(top.s, skeleton, ctx, byId, allowedIds,
+        `veckan är ${over} kr över budget – gör en billigare rätt (högst ca ${Math.max(10, Math.round(top.c - over))} kr totalt) med billigare kampanjvaror`, signal, [top.s.recipe.title]);
+      if (r.recipe && MP.recipeCost(r.recipe, p, byId).total * (top.s.mult || 1) < top.c) {
+        placeRecipe(top.s.i, r.recipe, skeleton);
+        PLAN.offers = MP.snapshotOffers(PLAN, byId);
+        cost = MP.planCost(PLAN, p, PLAN.offers, allowed);
+      }
+    }
+  }
+  PLAN.meta = { ms: Date.now() - meta.t0, calls: meta.calls, mode: meta.mode, promptKB: Math.round(meta.promptKB), unlinked: meta.unlinked.slice(0, 20) };
+  BUILD = null; savePlan(); renderPlan();
+  const failed = PLAN.slots.filter(s => !s.recipe && s.leftoverOf == null).length;
+  toast(failed ? `Veckan är klar, men ${failed} rätter behöver ett nytt försök.` : `Din vecka är klar på ${Math.round(PLAN.meta.ms / 1000)} s!`);
+}
+
 /* Ett recept för en plats. Underkänns det två gånger får platsen ett felmeddelande. */
 async function singleRecipe(slot, skeleton, ctx, byId, allowedIds, problem, signal, avoid = []) {
   let lastProblem = problem;
+  const ask = ctx.ask || ((pr, o) => sampleFn.json(pr, o));
+  const check = ctx.check || ((r, i) => MP.checkRecipe(r, ctx.prefs, byId, allowedIds, slotOpts(ctx.prefs)(i)));
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await sampleFn.json(MP.singleRecipePrompt({ ...ctx, slot, skeleton: skeleton.filter(s => s.i !== slot.i), problem: lastProblem, avoidTitles: avoid }), { signal, cache: false });
-      const { recipe, violations } = MP.checkRecipe(res?.recipe, ctx.prefs, byId, allowedIds);
-      if (!violations.length) return { recipe };
+      const sk = skeleton.find(s => s.i === slot.i) || slot;
+      const res = await ask(MP.singleRecipePrompt({ ...ctx, offers: MP.trimOffers(ctx.offers, [sk], 140), slot, skeleton: skeleton.filter(s => s.i !== slot.i), problem: lastProblem, avoidTitles: avoid }), { signal, cache: false });
+      const { recipe, violations } = check(res?.recipe, slot.i);
+      // budgeten är ett mjukt krav: sista försöket godtas om bara priset är för högt
+      if (!violations.length || (attempt === 1 && violations.every(v => v.type === "budget"))) return { recipe };
       lastProblem = MP.describeViolations(violations);
     } catch (e) { if (e?.code === "cancelled") throw e; lastProblem = lastProblem || "svaret gick inte att läsa"; }
   }
@@ -3004,6 +3162,7 @@ function renderPlan() {
         <span class="tx"><b>Inköpslista</b><small>${c.itemsToBuy} varor att köpa${c.itemsAtHome ? ` · ${c.itemsAtHome} finns hemma` : ""}</small></span>${icon("chevron-right")}</button>
         <button class="iconbtn press" type="button" id="planToList" aria-label="Lägg allt på inköpslistan" style="width:52px;height:52px">${icon("list-plus")}</button></div>
       ${plan.tip ? `<div class="note" style="margin-bottom:18px">${icon("recycle")}<span>${esc(plan.tip)}</span></div>` : ""}
+      ${plan.meta?.ms ? `<p class="foot" style="margin:-8px 0 14px">Skapad på ${Math.round(plan.meta.ms / 1000)} s med ${plan.meta.calls} anrop${plan.meta.unlinked?.length ? ` · ${plan.meta.unlinked.length} osäkra kopplingar till kampanjvaror ersattes med uppskattade priser` : ""}.</p>` : ""}
       ${p.updatedAt > (plan.prefsAt || 0) ? `<div class="note warn" style="margin-bottom:18px">${icon("info")}<span>Dina val har ändrats sedan planen skapades. Skapa en ny vecka för att planen ska följa dem.</span></div>` : ""}`;
   }
 
@@ -3331,7 +3490,7 @@ function renderPlist() {
             <button class="linkbtn" type="button" data-use="${esc(it.name)}" data-to="${esc(it.suggestion.id)}">Använd</button></span></span>` : ""}</div>
         <div class="lp"><b class="price muted">ca ${esc(krs(it.cost))}</b></div></div>`).join("")}</div>` : ""}
     ${home.length ? `<div class="lgroup"><div class="lh"><span class="schip" style="background:var(--mint)">${icon("house")}Finns hemma</span></div>
-      ${home.map(it => `<div class="pli done"><div class="ln">${esc(it.name)}<small>${esc(it.home === "basvara" ? "Basvara" : `Ni har ${it.home.toLowerCase()} hemma`)}</small></div></div>`).join("")}</div>` : ""}
+      ${home.map(it => `<div class="pli done"><div class="ln">${esc(it.name)}<small>${esc((it.home === "basvara" ? "Basvara" : `Ni har ${it.home.toLowerCase()} hemma`) + (fmtAmounts(it.amounts) ? ` · går åt ${fmtAmounts(it.amounts)}` : ""))}</small></div></div>`).join("")}</div>` : ""}
     <p class="foot">Mängderna gäller hela veckan för ${String(MP.portionsPerMeal(PP())).replace(".", ",")} portioner per måltid. Kampanjvaror räknas i hela förpackningar.</p>`;
   hydrate(sec);
   $("#plAll").onclick = addPlanToList;
