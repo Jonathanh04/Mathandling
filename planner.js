@@ -587,6 +587,43 @@
     return null;
   }
 
+  const FRAC = { 0.25: "¼", 0.5: "½", 0.75: "¾" };
+  function fmtNum(q, unit) {
+    const base = (UNITS[normalize(unit)] || ["st"])[0];
+    if (base === "st" || ["dl", "msk", "tsk", "krm"].includes(normalize(unit))) {
+      const r = Math.round(q * 4) / 4, whole = Math.floor(r), frac = Math.round((r - whole) * 100) / 100;
+      if (FRAC[frac] && r < 10) return whole ? `${whole} ${FRAC[frac]}` : FRAC[frac];
+      return String(Math.round(q * 10) / 10).replace(".", ",");
+    }
+    if (["kg", "l"].includes(normalize(unit))) return String(Math.round(q * 10) / 10).replace(".", ",");
+    if (q >= 100) return String(Math.round(q / 5) * 5);
+    return String(Math.round(q)).replace(".", ",");
+  }
+
+  /* Skalar en mängd ("2 msk") med en faktor och kan visa den i gram/milliliter (metric = true).
+     Text utan tal ("en nypa") lämnas orörd. */
+  function scaleAmount(amount, factor = 1, metric = false) {
+    const a = parseAmount(amount);
+    if (a.qty == null) return String(amount || "");
+    let q = a.qty * factor, unit = a.unit;
+    if (metric) {
+      const b = toBase(q, unit);
+      if (b.base === "g") return b.qty >= 1000 ? `${fmtNum(b.qty / 1000, "kg")} kg` : `${fmtNum(b.qty, "g")} g`;
+      if (b.base === "ml") return b.qty >= 1000 ? `${fmtNum(b.qty / 1000, "l")} l` : `${fmtNum(b.qty, "ml")} ml`;
+    }
+    return `${fmtNum(q, unit)}${unit ? " " + unit : ""}`;
+  }
+
+  /* Makron per portion → andelar av energin (protein och kolhydrater 4 kcal/g, fett 9 kcal/g). */
+  function macroShares(r) {
+    const p = (r.protein || 0) * 4, c = (r.carbs || 0) * 4, f = (r.fat || 0) * 9, sum = p + c + f;
+    if (!sum) return null;
+    return { protein: p / sum, carbs: c / sum, fat: f / sum };
+  }
+
+  /* Nyckel för ett recept (sparade recept och betyg), oberoende av versaler och skiljetecken. */
+  const recipeKey = r => "r-" + normalize(r && r.title).replace(/[åä]/g, "a").replace(/[öø]/g, "o").replace(/æ/g, "ae").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+
   /* ------------------------------------------------------------------ */
   /* 5. Kostnad och inköpslista                                           */
   /* ------------------------------------------------------------------ */
@@ -621,11 +658,29 @@
   /* Hittar billigare erbjudanden för samma sak i de valda butikerna (samma kategori + gemensamma ord i namnet). */
   const STOP = new Set(["eller", "med", "från", "utan", "ekologisk", "ekologiska", "ekologiskt", "dansk", "danska", "danskt", "färsk",
     "färska", "fryst", "stor", "stora", "små", "mini", "klassisk", "original", "pack", "naturell"]);
-  function keyWords(t) { return normalize(t).split(/[^a-zåäöæø0-9]+/).filter(w => w.length > 3 && !STOP.has(w)); }
+  /* Huvudord: sista ordet i varje "eller"-alternativ ("Cheasy eller Riberhus skivad ost" → ost; "Salling Princip
+     grönlandsräkor" → grönlandsräkor). Märkesnamn och adjektiv räknas därmed inte som samma vara. */
+  function headWords(t) {
+    return normalize(t).replace(/\([^)]*\)/g, " ").split(/\s+eller\s+|,|\/|\s+och\s+|\s+med\s+/)
+      .map(part => part.split(/\s+(?:i|av|från|på|till|à)\s+/)[0])   // "räkor i lake", "fläskstek av dansk gris"
+      .map(part => part.split(/[^a-zåäöæø]+/).filter(w => w.length >= 3 && !STOP.has(w)).pop())
+      .filter(Boolean);
+  }
+  // samma huvudord, eller ett sammansatt ord som slutar på det andra (grönlandsräkor ~ räkor)
+  const sameHead = (a, b) => a === b || (Math.min(a.length, b.length) >= 5 && (a.endsWith(b) || b.endsWith(a)));
+  // Ord som ändrar vad varan är (krossade tomater ≠ färska tomater): måste finnas i båda namnen
+  const PROCESS = ["krossad", "hakked", "passerad", "soltorkad", "torkad", "fryst", "frys", "rökt", "röget", "gravad", "inlagd", "riven",
+    "revet", "skivad", "skiver", "mald", "malen", "konserv", "burk", "glas"];
+  const processOf = t => { const n = normalize(t); return PROCESS.filter(w => n.includes(w)); };
   function alternatives(name, cat, offers) {
-    const words = new Set(keyWords(name));
-    if (!words.size) return [];
-    return offers.filter(o => (!cat || o.c === cat) && keyWords((o.sv || "") + " " + o.n).some(w => words.has(w)));
+    const heads = headWords(name), proc = processOf(name);
+    if (!heads.length) return [];
+    return offers.filter(o => {
+      if (cat && o.c !== cat) return false;
+      const on = (o.sv || "") + " " + o.n;
+      if (proc.length && !proc.every(w => normalize(on).includes(w))) return false;
+      return headWords(o.sv || o.n).some(h => heads.some(x => sameHead(h, x)));
+    });
   }
   // Billigare? Jämförpris när båda har samma enhet, annars styckpris.
   const cmpPrice = (a, b) => (a.up && b.up && a.uu === b.uu) ? a.up - b.up : a.p - b.p;
@@ -852,7 +907,7 @@ Regler för recepten:
 - "main_offer_id" = kampanjvaran som är rättens huvudråvara (för bild), eller null.
 
 Svara ENDAST med JSON:
-{"recipes":[{"i":0,"title":"...","description":"en mening","time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["...","..."]}]}
+{"recipes":[{"i":0,"title":"...","description":"en mening","prep_min":10,"cook_min":15,"time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"kycklinglårfilé","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["...","..."]}]}
 
 Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
 ${offerLines(offers, stores)}`;
@@ -871,7 +926,7 @@ ${avoidTitles.length ? `Föreslå INTE något av detta: ${avoidTitles.join("; ")
 Samma regler som för övriga recept: svenska, metriska mått, offer_id eller null, est_price för varje ingrediens, pantry för basvaror, equipment bara bland ${prefs.appliances.join(", ")}, kcal/protein/carbs/fat per vuxen portion, main_offer_id.
 
 Svara ENDAST med JSON:
-{"recipe":{"title":"...","description":"en mening","time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"...","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["..."]}}
+{"recipe":{"title":"...","description":"en mening","prep_min":10,"cook_min":15,"time_min":25,"servings":${portionsPerMeal(prefs)},"equipment":["spis"],"kcal":520,"protein":32,"carbs":45,"fat":20,"main_offer_id":"ID1","ingredients":[{"name":"...","amount":"500 g","offer_id":"ID1","est_price":45,"pantry":false}],"steps":["..."]}}
 
 Kampanjvaror som gäller idag (offer_id|butik|vara|pris|detaljer):
 ${offerLines(offers, stores)}`;
@@ -892,7 +947,8 @@ ${offerLines(offers, stores)}`;
     return {
       title: str(raw.title, 80) || "Namnlös rätt",
       description: str(raw.description, 200),
-      time_min: num(raw.time_min, 1, 600),
+      prep_min: num(raw.prep_min, 0, 600), cook_min: num(raw.cook_min, 0, 600),
+      time_min: num(raw.time_min, 1, 600) || ((num(raw.prep_min, 0, 600) || 0) + (num(raw.cook_min, 0, 600) || 0)) || null,
       servings: num(raw.servings, 0.5, 30) || portionsPerMeal(prefs) || 2,
       equipment: (Array.isArray(raw.equipment) ? raw.equipment : []).map(String).filter((x, i, a) => a.indexOf(x) === i),
       kcal: num(raw.kcal, 0, 3000), protein: num(raw.protein, 0, 300), carbs: num(raw.carbs, 0, 500), fat: num(raw.fat, 0, 300),
@@ -947,10 +1003,10 @@ ${offerLines(offers, stores)}`;
     MEALS, DAYS, APPLIANCES, DIETS, VIBES, ALLERGENS, DISLIKES, PANTRY, PANTRY_TABS, STEPS,
     normalize, allergensIn, dietViolation, violations, filterOffers, recipeViolations, offerText, offerName, offerStatus,
     defaultPrefs, sanitizePrefs, stepValid, portionsPerMeal, mealsPerWeek, portionsPerWeek, budgetRange, mealCalorieTargets, slots,
-    parseAmount, toBase, packSize, matchPantry, recipeCost, alternatives, shoppingList, planCost,
+    parseAmount, toBase, packSize, matchPantry, recipeCost, alternatives, headWords, shoppingList, planCost,
     createPrefStore,
     PLAN_CATS, planOffers, planBudget, constraintsText, skeletonPrompt, recipesPrompt, singleRecipePrompt,
-    normalizeRecipe, checkRecipe, describeViolations, snapshotOffers, pool,
+    normalizeRecipe, checkRecipe, describeViolations, snapshotOffers, pool, scaleAmount, macroShares, recipeKey,
   };
   root.Planner = Planner;
   if (typeof module !== "undefined" && module.exports) module.exports = Planner;

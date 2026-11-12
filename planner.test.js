@@ -275,6 +275,30 @@
       eq(r, [10, 20, 30, 40, 50]); ok(peak <= 2);
     });
 
+    /* ---------------- Billigare alternativ ---------------- */
+    const alt = (name, cands, cat) => P.alternatives(name, cat, cands.map((sv, k) => ({ id: "a" + k, sv, n: sv, c: cat || "x", p: 10 }))).map(o => o.sv);
+    t("Alternativ", "samma märke men annan vara matchar inte", () => eq(alt("Cheasy eller Riberhus skivad ost", ["Cheasy keso", "Klovborg skivad ost"]), ["Klovborg skivad ost"]));
+    t("Alternativ", "räkor matchar inte sill bara för att märket är samma", () =>
+      eq(alt("Salling Princip grönlandsräkor", ["Salling Princip marinerad sill, kryddsill eller currysill", "Räkor i lake"]), ["Räkor i lake"]));
+    t("Alternativ", "samma vara från annat märke matchar", () => eq(alt("Salling Princip krokmörad dansk fläskstek", ["Ugnsklar dansk fläskstek", "Fläskfilé"]), ["Ugnsklar dansk fläskstek"]));
+    t("Alternativ", "\"X i Y\" och \"X av Y\" ger X", () => eq([...P.headWords("Tonfisk i vatten"), ...P.headWords("Fläskstek av dansk gris")], ["tonfisk", "fläskstek"]));
+    t("Alternativ", "krossade tomater matchar inte färska tomater", () => eq(alt("krossade tomater", ["Körsbärstomater på kvist", "Mutti krossade tomater"]), ["Mutti krossade tomater"]));
+    t("Alternativ", "fläskstek matchar inte stekmargarin", () => eq(alt("fläskstek", ["Oma/Becel stek- och bakmargarin", "Ugnsklar fläskstek"]), ["Ugnsklar fläskstek"]));
+    t("Alternativ", "ingrediensnamn hittar kampanjvara", () => eq(alt("vetemjöl", ["Amo vetemjöl", "Vetebröd"]), ["Amo vetemjöl"]));
+    t("Alternativ", "huvudord tar bort parenteser och märken", () => eq(P.headWords("Barolo Fontanafredda (vin)"), ["fontanafredda"]));
+
+    /* ---------------- Receptsidan ---------------- */
+    const sc = [["1 dl", 2, false, "2 dl"], ["2 msk", 1, true, "30 ml"], ["½ st", 3, false, "1 ½ st"], ["250 g", 1.25, false, "315 g"],
+      ["1 burk", 1.5, false, "1 ½ burk"], ["en nypa", 3, false, "en nypa"], ["600 g", 2, true, "1,2 kg"], ["3 dl", 4, true, "1,2 l"],
+      ["2 st", 1.25, false, "2 ½ st"], ["40 g", 0.5, false, "20 g"]];
+    for (const [a1, f, m, want] of sc) t("Receptsidan", `"${a1}" × ${f}${m ? " i g/ml" : ""} → "${want}"`, () => eq(P.scaleAmount(a1, f, m), want));
+    t("Receptsidan", "makroandelar summerar till 1 och fett väger tyngre per gram", () => {
+      const m = P.macroShares({ protein: 30, carbs: 30, fat: 20 }); near(m.protein + m.carbs + m.fat, 1); ok(m.fat > m.protein);
+    });
+    t("Receptsidan", "inga makron → ingen stapel", () => eq(P.macroShares({}), null));
+    t("Receptsidan", "receptnyckel är stabil", () => eq(P.recipeKey({ title: "Kyckling i ugn med rotfrukter!" }), P.recipeKey({ title: "kyckling i ugn med  rotfrukter" })));
+    t("Receptsidan", "förberedelse + tillagning blir total tid", () => eq(P.normalizeRecipe({ prep_min: 10, cook_min: 25, ingredients: [] }, planPrefs).time_min, 35));
+
     /* ---------------- Sparning ---------------- */
     function fakeStorage() { const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), _m: m }; }
     function fakeDb() {
