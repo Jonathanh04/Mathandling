@@ -182,10 +182,11 @@
     // --- kost ---
     meat: rule([
       "kött", "kød", "nötkött", "nötfärs", "nöt(?:bog|stek|filé|biff|klump|innanlår)", "okse", B + "oxe", "oxfil", "oxkind",
-      "fläsk", "flæsk", B + "gris", "grise", "kyckling", "kylling", "poussin", "höns", "høns", "kalkon", "kalkun", "kalv",
+      "fläsk", "flæsk", "gris(?!sini)", "grise", "kyckling", "kylling", "poussin", "höns", "høns", "kalkon", "kalkun", "kalv",
       B + "and" + E, B + "anka", "andebryst", "andelår", "andesteg", "andesauce", "andefedt", "andemenu", "ankbröst", "anklår",
       "landand", "pekingand", "berberiand", "barbarieank", "confit de canard", "lamm", B + "lam" + E, "lammekød", "vilt" + E,
-      "vildt", "vildsvin", "hjort", "älg", "bacon", "skinka", "skinke", "kassler", "hamburgerryg",
+      "vildt", "vildsvin", "hjort", "älg", "rådjur", "rådyr", "fasan", B + "gås" + E, "gåse", "gåsbröst", "gåslår", "kanin", B + "hare" + E,
+      "burgerboost", "burger boost", "vaktel", "vagtel", "rapphöna", "agerhøne", "duvbröst", "dueb", "struds", "charkuteri", "charcuteri", "chark" + E, "bacon", "skinka", "skinke", "kassler", "hamburgerryg",
       "korv", "pølse", "pölse", "salami", "spegepølse", "chorizo", "pepperoni", "serrano", "prosciutto", "bresaola", "pancetta",
       "parmaskinke", "köttbull", "kødbolle", "frikadell", "frikadelle", B + "färs" + E, "färs" + E, B + "fars" + E,
       "leverpastej", "leverpostej", "postej", "pastej", "paté", "pate" + E, "medister", "gelatin", "kebab", "gyros", "bolognese",
@@ -200,7 +201,8 @@
       "grönsaksbuljong", "grøntsagsbouillon", "vildtfugle", "vildfugle", "nötter", "nötmix", "hasselnöt", "valnöt", "paranöt",
       "fisknugget", "fiskenugget", "fruktkött", "frugtkød", "kokoskött"]),
     honey: rule(["honung", "honning", "honey"]),
-    gelatin: rule(["gelatin", "vingummi", "skum" + E, "julskum", "juleskum", "geléhallon", "haribo", "marshmallow"]),
+    gelatin: rule(["gelatin", "vingummi", B + "gummi", "skum" + E, "julskum", "juleskum", "skumgodis", "geléhallon", "haribo", "malaco",
+      "marshmallow", "godispåse", "slikpose", "plockgodis", "bland selv", "lösgodis", "smågodis"]),
     keto: rule([
       "bröd", "brød", "pasta", "spaghetti", "penne", "makaroni", "lasagne", "nudl", "nudler", B + "ris" + E, "risotto",
       "jasminris", "basmatiris", "grötris", "grødris", "risgryn", "potatis", "kartof", "pommes", "klyftpotatis", "socker", "sukker",
@@ -210,6 +212,29 @@
       "knækbrød", "kex", "kiks", "chips", "pommes frites", "gnocchi", "dadl", "russin", "rosiner", "smoothie",
     ], ["pris", "kris"]),
   };
+
+  // Färdigprodukter vars innehåll inte framgår av namnet (kan innehålla kött, fisk eller allergener)
+  const COMPOSITE = rule([
+    "färdigrätt", "færdigret", "middagsrätt", "middagsret", "maxirätt", B + "meny" + E, B + "menu" + E, "nyårsmeny", "nytårsmenu",
+    "julbord", "julefrokost", "mårtensafton", "mortensaften", "tapas", "smörrebröd", "smørrebrød", "smörgås(?!papper)", "sandwich",
+    "pizza(?!botten|bund|deg|dej|sås|sauce|mjöl|mel|ost|topping)", "fylld pasta", "fyldt pasta", "tortellini", "ravioli", "gyoza",
+    "dumpling", "xiao long", "siao long", B + "bao" + E, "vårrull", "forårsrul", "moussaka", "soppa", "suppe", "snack pot",
+    "lasagne(?!plattor|plader)", "lunchbox", "matlåda", "salladsbar", "salatbar", "wrap" + E, "piroger", "pirog", "empanada",
+    "burrito", "enchilada", "quiche", "paj" + E, "tærte" + E, "pie" + E, "risotto", "paella", "gryta", "gryderet", "biryani",
+    "curry" + E, "korma", "tikka", "nudelrätt", "nudelret", "asia cubes", "chicken dippers", B + "topping", B + "fond" + E,
+    "specialiteter", "specialiteten", "delikatesse", "brun sås", "brun sovs", "skysås",
+  ], ["pizzaost", "pizzatopping"]);
+  // Uttryckligen vegetariskt (släpper igenom en färdigprodukt för vegetarianer, inte för allergier)
+  const VEG_EXPLICIT = rule(["grönsak", "grøntsag", "vegetar", "falafel", "margherita", "grönsakslasagne", "grøntsagslasagne", "svampfond"]);
+  // Annat än mat som ibland ligger i matkategorierna i reklambladen
+  const NONFOOD = rule(["batteri", "duracell", "tvättmedel", "vaskemiddel", B + "vask" + E, "skrivare", "printer", "vattenkokare",
+    "elkedel", "folie" + E, "alufolie", "stavmixer", "stavblender", "elvisp", "håndmixer", "tvättmaskin", "vaskemaskine",
+    "torktumlare", "tørretumbler", "parfym", "edp" + E, "hårvård", "hårpleje", "presentpapper", "gavepapir", "etikett", "mærke" + E,
+    "oljeljus", "gravljus", "kronljus", "värmeljus", "blockljus", "adventsljus", "doftljus", "stearinljus", "kronelys", "fyrfadslys",
+    "bloklys", "stearinlys", "duftlys", "kertelys", "lys i glas", "tomtebloss", "stjernekaster", "kattmat", "kattemad", "hundmat",
+    "hundemad", "fågelfrö", "talgboll", "fuglebolde", "vildfugle", "klädgalge", "bøjle", B + "pall" + E, "skammel", "avkalk",
+    "afkalk", "avloppsrens", "afløbsrens", "skin tint", "kvarn", "kværn", "skummare", "skummer" + E, "burk med", "dåse med",
+    "smörgåspapper", "frokostfolie", "servett", "serviet"]);
 
   // Kategorier i data.json som i sig avgör kost
   const CAT_MEAT = new Set(["kott", "chark"]);
@@ -325,22 +350,27 @@
 
   // Vilken kost en text bryter mot (null = ok)
   function dietViolation(text, cat, diet, name = text) {
+    const unknownMix = matches(name, COMPOSITE);
     switch (diet) {
       case "vegetarian":
         if (isMeat(text, cat, name)) return "innehåller kött";
+        if (unknownMix && !matches(name, PLANT) && !matches(name, VEG_EXPLICIT)) return "färdigprodukt som kan innehålla kött eller fisk";
         if (isFishOrShellfish(text, cat)) return "innehåller fisk";
         if (matches(text, R.gelatin)) return "innehåller gelatin";
         return null;
       case "vegan": {
         const v = dietViolation(text, cat, "vegetarian", name); if (v) return v;
         const plant = matches(name, PLANT);
+        if (unknownMix && !plant) return "färdigprodukt som kan innehålla mjölk eller ägg";
         if (!plant && (matches(text, R.milk) || cat === "ost")) return "innehåller mjölk";
         if (matches(text, R.egg)) return "innehåller ägg";
         if (matches(text, R.honey)) return "innehåller honung";
         return null;
       }
       case "pescetarian":
-        return isMeat(text, cat, name) ? "innehåller kött" : null;
+        if (isMeat(text, cat, name)) return "innehåller kött";
+        return unknownMix && !matches(name, PLANT) && !matches(name, VEG_EXPLICIT) && !isFishOrShellfish(text, cat)
+          ? "färdigprodukt som kan innehålla kött" : null;
       case "keto":
         if (cat === "brod" || (cat === "godis" && !matches(text, rule(["nötter", "mandl", "nødder", "jordnöt"])))) return "för mycket kolhydrater";
         return matches(text, R.keto) ? "för mycket kolhydrater" : null;
@@ -360,6 +390,9 @@
     const out = [], text = item.text || "", cat = item.cat, name = item.name || text;
     for (const a of allergensIn(text, cat, name)) {
       if ((prefs.allergies || []).includes(a)) out.push({ type: "allergi", id: a, label: ALLERGEN[a].label });
+    }
+    if ((prefs.allergies || []).length && !out.length && matches(name, COMPOSITE)) {
+      out.push({ type: "allergi", id: "okant", label: "Färdigprodukt med okänt innehåll" });
     }
     const d = dietViolation(text, cat, prefs.diet, name);
     if (d) out.push({ type: "kost", id: prefs.diet, label: `${DIET[prefs.diet].label}: ${d}` });
@@ -387,7 +420,7 @@
     const stores = new Set(prefs.stores || []);
     for (const o of offers) {
       if (stores.size && !stores.has(o.s)) continue;
-      if (CAT_NONFOOD.has(o.c)) continue;
+      if (CAT_NONFOOD.has(o.c) || matches(offerName(o), NONFOOD)) continue;
       if (offerStatus(o, now) !== "now") continue;
       const v = violations({ text: offerText(o), name: offerName(o), cat: o.c }, prefs);
       if (v.length) excluded.push({ offer: o, reasons: v }); else ok.push(o);

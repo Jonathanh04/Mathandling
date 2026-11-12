@@ -255,6 +255,98 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 .pick .pn{font-weight:600;font-size:13px;line-height:18px}
 .pick .pw{font-size:12px;line-height:16px;color:var(--text-muted);font-style:italic}
 
+/* --- veckomatsedel: onboarding och inställningar --- */
+.onb{display:flex;flex-direction:column;min-height:calc(100vh - 24px);padding-bottom:120px}
+.onbtop{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;display:flex;align-items:center;gap:12px;padding-block:8px 10px;margin-inline:calc(-1 * var(--gutter));padding-inline:var(--gutter);background:linear-gradient(180deg,var(--bg-top) 70%,rgba(253,233,222,0))}
+.prog{flex:1;height:8px;border-radius:4px;background:#F6E2D8;overflow:hidden}
+.prog span{display:block;height:100%;border-radius:4px;background:var(--primary);transition:width 300ms ease}
+.onbcount{font-size:12px;font-weight:700;color:var(--text-muted);min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
+.onbhead{margin:14px 0 20px}
+.onbhead h1{font-size:26px;line-height:32px;font-weight:700;margin:0 0 6px;letter-spacing:-.01em;text-wrap:balance}
+.onbhead p{margin:0;color:var(--text-muted);font-size:15px;line-height:22px}
+.onbbody{animation:onbIn 220ms ease-out}
+@keyframes onbIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.onbbody{animation:none}.prog span{transition:none}}
+.ogrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ogrid.three{grid-template-columns:repeat(3,1fr)}
+.osel{position:relative;background:#fff;border:1.5px solid var(--line);border-radius:20px;padding:14px;min-height:96px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;box-shadow:var(--shadow);transition:border-color 160ms,background-color 160ms}
+.osel[aria-pressed="true"],.osel[aria-checked="true"]{border-color:var(--primary);background:#FFF5EF}
+.osel .ck{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);background:#fff;display:grid;place-items:center;color:#fff}
+.osel .ck svg.lucide{width:14px;height:14px;stroke-width:3}
+.osel[aria-pressed="true"] .ck,.osel[aria-checked="true"] .ck{background:var(--primary);border-color:var(--primary)}
+.osel .oi{width:40px;height:40px;border-radius:12px;background:var(--peach);color:var(--primary);display:grid;place-items:center}
+.osel b{font-size:15px;line-height:20px;font-weight:700;padding-right:26px}
+.osel small{font-size:12px;line-height:16px;color:var(--text-muted)}
+.osel.center{align-items:center;text-align:center;justify-content:center}
+.osel.center b{padding-right:0}
+.slogo{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px;letter-spacing:-.02em;box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
+.olist{display:flex;flex-direction:column;gap:12px}
+.orow{display:flex;align-items:center;gap:14px;background:#fff;border:1.5px solid var(--line);border-radius:20px;padding:14px 16px;text-align:left;box-shadow:var(--shadow);min-height:72px}
+.orow[aria-pressed="true"]{border-color:var(--primary);background:#FFF5EF}
+.orow .sw2{width:44px;height:44px;border-radius:14px;flex:none}
+.orow .tx{flex:1;min-width:0}.orow .tx b{display:block;font-size:16px}.orow .tx small{color:var(--text-muted);font-size:13px}
+.orow .box{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--line);display:grid;place-items:center;color:#fff;flex:none}
+.orow[aria-pressed="true"] .box{background:var(--primary);border-color:var(--primary)}
+.orow .box svg.lucide{width:16px;height:16px;stroke-width:3}
+.counter{display:flex;align-items:center;gap:14px;background:#fff;border:1.5px solid var(--line);border-radius:20px;padding:14px 16px;box-shadow:var(--shadow)}
+.counter .tx{flex:1}.counter .tx b{display:block;font-size:16px}.counter .tx small{color:var(--text-muted)}
+.counter .stepper{border:0;background:var(--peach)}
+.counter .stepper span{font-size:18px;min-width:34px}
+.note{border-radius:18px;background:var(--mint);padding:14px 16px;display:flex;gap:10px;align-items:center;font-size:14px;line-height:20px}
+.note svg.lucide{color:var(--success);flex:none}
+.note.warn{background:var(--warn-bg)}.note.warn svg.lucide{color:var(--warn)}
+.daysrow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.dayb{height:64px;border-radius:16px;border:1.5px solid var(--line);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-weight:700;font-size:16px;box-shadow:var(--shadow)}
+.dayb .ck{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;color:#fff}
+.dayb .ck svg.lucide{width:12px;height:12px;stroke-width:3}
+.dayb[aria-pressed="true"]{border-color:var(--primary);background:#FFF5EF}
+.dayb[aria-pressed="true"] .ck{background:var(--primary);border-color:var(--primary)}
+.center-note{text-align:center;color:var(--text-muted);font-size:14px;margin-top:14px}
+.calf{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.calf .field input{height:52px;border-radius:16px;border:1px solid var(--line);padding:0 14px;font-size:16px;width:100%;background:#fff}
+.chipwrap{display:flex;flex-wrap:wrap;gap:8px}
+.chipwrap .chip{height:40px;font-size:14px}
+.chipwrap .chip[aria-pressed="true"]{background:#FFF0E8;color:var(--primary-ink);border-color:var(--primary);box-shadow:none}
+.chipwrap .chip svg.lucide{width:16px;height:16px}
+.srch{display:flex;align-items:center;gap:10px;height:52px;border-radius:var(--r-pill);background:#fff;border:1px solid var(--line);padding:0 16px;margin-bottom:14px;color:var(--text-muted)}
+.srch input{flex:1;min-width:0;border:0;outline:0;background:none;font-size:15px}
+.tabs2{display:flex;gap:8px;margin:0 calc(-1 * var(--gutter)) 14px;padding:0 var(--gutter)}
+.tabs2 .chip{height:36px;font-size:13px;padding:0 14px}
+.pcard{background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:12px 8px;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:96px;box-shadow:var(--shadow);position:relative;font-size:13px;font-weight:600;text-align:center}
+.pcard .oi{width:44px;height:44px;border-radius:14px;background:var(--cream);color:var(--primary);display:grid;place-items:center}
+.pcard[aria-pressed="true"]{border-color:var(--primary);background:#FFF5EF}
+.pcard .ck{position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:50%;background:var(--primary);color:#fff;display:none;place-items:center}
+.pcard .ck svg.lucide{width:12px;height:12px;stroke-width:3}
+.pcard[aria-pressed="true"] .ck{display:grid}
+.bigamt{display:flex;align-items:baseline;justify-content:center;gap:6px;margin:6px 0 4px}
+.bigamt input{width:5.2ch;border:0;background:none;text-align:right;font:800 56px/1 var(--font);color:var(--text);padding:0;outline:0;font-variant-numeric:tabular-nums}
+.bigamt input:focus{border-bottom:3px solid var(--primary)}
+.bigamt span{font-size:24px;font-weight:700;color:var(--text-muted)}
+.bighint{text-align:center;font-size:13px;color:var(--text-muted);margin-bottom:12px}
+.range{width:100%;accent-color:var(--primary);height:32px}
+.rlabels{display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-top:-2px}
+.ktiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.ktile{background:#fff;border-radius:16px;padding:12px 10px;text-align:center;box-shadow:var(--shadow)}
+.ktile b{display:block;font-size:18px;line-height:24px}.ktile small{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.onbcta{position:fixed;z-index:30;left:50%;transform:translateX(-50%);bottom:0;width:min(480px,100%);padding:14px var(--gutter) calc(16px + env(safe-area-inset-bottom,0px));background:linear-gradient(180deg,rgba(255,255,255,0),#fff 30%);display:flex;flex-direction:column;gap:6px}
+.onbcta .btn{height:56px;width:100%;font-size:16px}
+.onbcta .btn:disabled{background:#EFC3AE;box-shadow:none;cursor:default}
+.onbcta .skip{height:40px;color:var(--text-muted);font-weight:600}
+.setrow{display:flex;align-items:center;gap:12px;width:100%;padding:14px 4px;border-top:1px solid #FBEFE8;text-align:left}
+.setrow:first-child{border-top:0}
+.setrow .oi{width:40px;height:40px;border-radius:12px;background:var(--peach);color:var(--primary);display:grid;place-items:center;flex:none}
+.setrow .tx{flex:1;min-width:0}.setrow .tx b{display:block;font-size:15px}.setrow .tx small{display:block;color:var(--text-muted);font-size:13px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.setrow > svg.lucide{color:var(--text-muted)}
+.mphero{border-radius:var(--r-banner);background:var(--primary-soft);padding:20px;margin-bottom:18px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.mphero h2{margin:0;font-size:22px;line-height:28px;font-weight:700}
+.mphero p{margin:0;color:var(--text);opacity:.8}
+.mphero .chips3{display:flex;flex-wrap:wrap;gap:6px}
+.mphero .chips3 span{background:rgba(255,255,255,.8);border-radius:var(--r-pill);padding:4px 10px;font-size:12px;font-weight:600}
+.mphero .acts{display:flex;gap:10px;flex-wrap:wrap}
+.mphero .ghostbtn{background:rgba(255,255,255,.9)}
+.oldmenu{margin-top:8px}
+.oldmenu > summary{cursor:pointer;font-weight:600;color:var(--text-muted);padding:8px 0}
+
 /* --- prishistorik --- */
 :root{ --good:#1F7A50; --good-bg:#E3F4EC; --warn:#9A5B00; --warn-bg:#FFF1D6; }
 .hb{height:22px;padding:0 8px 0 6px;border-radius:var(--r-pill);font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
@@ -441,6 +533,8 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
     </div>
 
     <div id="paneM" hidden>
+      <div id="mpEntry"></div>
+      <details class="oldmenu" id="oldMenu"><summary>Snabb veckomeny (ersätts av den nya matsedeln)</summary>
       <form class="panel" id="mform">
         <div class="selrow">
           <label class="field" for="mstore">Butik<select id="mstore"></select></label>
@@ -463,6 +557,7 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
         <span class="status" id="mstatus">Bygger en meny på dagens erbjudanden, med ingredienser som återanvänds så att mindre blir över.</span>
       </form>
       <div id="mout"></div>
+      </details>
     </div>
 
     <div id="paneD" hidden>
@@ -497,6 +592,12 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
     <p class="status" id="syncNote" style="margin:-6px 0 14px;text-align:center">Listan sparas i den här webbläsaren.</p>
     <div id="listOut"></div>
   </section>
+
+  <!-- ============ VECKOMATSEDEL: ONBOARDING ============ -->
+  <section id="s-onb" data-screen="onb" hidden></section>
+
+  <!-- ============ VECKOMATSEDEL: INSTÄLLNINGAR ============ -->
+  <section id="s-mpset" data-screen="mpset" hidden></section>
 
   <!-- ============ PRODUKTDETALJ ============ -->
   <section id="s-detail" data-screen="detail" hidden></section>
@@ -536,6 +637,7 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 </div>
 <div class="toast" id="toast" hidden role="status"></div>
 
+<script src="planner.js"></script>
 <script>
 /* ================= grunddata ================= */
 const CATS = [
@@ -692,8 +794,10 @@ function afterList(){
   if (st.screen === "list") renderList();
   if (st.screen === "detail") renderCta();
 }
+let resolveDb; const dbReady = new Promise(r => { resolveDb = r; });
 async function initShared(){
   const db = await (window.claude?.use?.("db") ?? null);
+  resolveDb(db);
   const user = await (window.claude?.use?.("user") ?? null);
   if (user) {
     try { const n = (await user.name()) || ""; if (n) { const f = n.split(/\s+/)[0]; $("#avatar").textContent = f[0].toUpperCase(); greet(f); } } catch {}
@@ -729,11 +833,14 @@ function go(s){
   if (s !== "detail") { prevScreen = s; st.detail = null; }
   st.screen = s; saveUi();
   document.querySelectorAll("[data-screen]").forEach(el => el.hidden = el.dataset.screen !== s);
-  $("#bnav").hidden = s === "detail"; $("#cta").hidden = s !== "detail";
+  $("#bnav").hidden = s === "detail" || s === "onb"; $("#cta").hidden = s !== "detail";
   document.querySelectorAll(".nb").forEach(b => b.dataset.go === s ? b.setAttribute("aria-current","page") : b.removeAttribute("aria-current"));
   if (s === "favs") renderFavs();
   if (s === "list") renderList();
   if (s === "home") renderHome();
+  if (s === "onb") renderOnb();
+  if (s === "mpset") renderMpSettings();
+  if (s === "cook") renderMpEntry();
   window.scrollTo({ top: 0 });
 }
 document.addEventListener("click", e => {
@@ -1300,6 +1407,333 @@ async function initSample(){
   if (!sampleFn) { $("#rgo").disabled = $("#dgo").disabled = $("#mgo").disabled = true; $("#rstatus").textContent = $("#dstatus").textContent = $("#mstatus").textContent = "Den här funktionen fungerar när appen är öppen i Claude."; }
 }
 
+/* ================= veckomatsedel: hushållets val ================= */
+const MP = window.Planner || null;
+let prefStore = null, onbStep = 0, onbMode = "flow", pantryTab = "all", pantryQ = "", dislikeQ = "";
+const lsWrap = { getItem: k => { try { return localStorage.getItem(k); } catch { return null; } }, setItem: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const PP = () => prefStore ? prefStore.get() : (MP ? MP.sanitizePrefs(MP.defaultPrefs()) : {});
+function setPrefs(patch, rerender = true) { if (!prefStore) return; prefStore.update(patch); if (rerender) renderOnbBody(); }
+
+async function initPrefs() {
+  if (!MP || !DATA) return;
+  const db = await dbReady;
+  prefStore = MP.createPrefStore({
+    db, storage: lsWrap, knownStores: Object.keys(DATA.stores),
+    onChange: (p, src) => {
+      if (src !== "remote") return;
+      const typing = document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
+      if (st.screen === "onb" && !typing) renderOnbBody();
+      if (st.screen === "mpset") renderMpSettings();
+      if (st.screen === "cook") renderMpEntry();
+    },
+  });
+  await prefStore.load();
+  prefStore.subscribe();
+  renderMpEntry();
+}
+
+const STEP_META = {
+  stores: { t: "Var handlar du?", s: "Välj butikerna du brukar handla i. Planen byggs på deras erbjudanden.", icon: "store" },
+  people: { t: "Vem äter?", s: "Varje måltid skalas efter hushållet. Barn räknas som en halv portion.", icon: "users" },
+  meals: { t: "Vilka måltider?", s: "Välj vad vi ska planera varje vecka.", icon: "utensils" },
+  days: { t: "Vilka dagar lagar du mat?", s: "Vi planerar bara de dagar du väljer.", icon: "calendar-days" },
+  kitchen: { t: "Vad finns i ditt kök?", s: "Tryck på det du har. Vi föreslår bara recept du kan laga.", icon: "cooking-pot" },
+  diet: { t: "Hur äter du?", s: "Välj det som passar bäst för hushållet.", icon: "leaf" },
+  vibe: { t: "Vilken vibe?", s: "Vilken sorts mat vill ni ha? Välj en eller flera.", icon: "sparkles" },
+  calories: { t: "Har du ett kalorimål?", s: "Vi kan räkna mot ett mål, eller bara hålla måltiderna balanserade.", icon: "flame" },
+  allergies: { t: "Allergier?", s: "Det du väljer här kommer aldrig med i någon plan.", icon: "shield-alert" },
+  dislikes: { t: "Något du inte gillar?", s: "Vi håller dessa borta från alla planer.", icon: "thumbs-down" },
+  pantry: { t: "Vad har du redan hemma?", s: "Planen använder det först och drar av det från inköpslistan.", icon: "refrigerator" },
+  budget: { t: "Din veckobudget", s: "Hur mycket vill ni lägga på maten per vecka?", icon: "wallet" },
+};
+const MEAL_COLORS = { breakfast: "#FCE7C8", lunch: "#D8F1E3", dinner: "#FBD9C6", snack: "#F7D6DA" };
+const MEAL_ICONS = { breakfast: "sunrise", lunch: "sandwich", dinner: "utensils", snack: "apple" };
+const DIET_EST = { vegetarian: 26, vegan: 24, keto: 40, highprotein: 38 };   // ungefärligt kr per portion före planen finns
+
+function storeLogo(sid) {
+  const s = DATA.stores[sid] || { name: sid, color: "#999" };
+  const ini = s.name.replace(/[^A-Za-zÆØÅæøå0-9]/g, "").slice(0, s.name.length > 6 ? 2 : 3).toUpperCase();
+  return `<span class="slogo" style="background:${s.color}">${esc(ini)}</span>`;
+}
+const ck = () => `<span class="ck">${icon("check")}</span>`;
+
+/* ---------- sammanfattning (inställningar + startkort) ---------- */
+function summarize(step, p) {
+  const list = (ids, all) => ids.map(id => (all.find(x => x.id === id) || { label: id }).label);
+  switch (step) {
+    case "stores": return p.stores.length ? p.stores.map(id => DATA.stores[id]?.name || id).join(", ") : "Inga valda";
+    case "people": return `${p.adults} vuxna${p.kids ? `, ${p.kids} barn` : ""} · ${String(MP.portionsPerMeal(p)).replace(".", ",")} portioner per måltid`;
+    case "meals": return list(p.meals, MP.MEALS).join(", ") || "Inga";
+    case "days": return p.days.length === 7 ? "Alla dagar" : list(p.days, MP.DAYS).map(x => x.slice(0, 3)).join(", ");
+    case "kitchen": return `${p.appliances.length} av ${MP.APPLIANCES.length}: ` + list(p.appliances, MP.APPLIANCES).join(", ");
+    case "diet": return list([p.diet], MP.DIETS)[0];
+    case "vibe": return list(p.vibes, MP.VIBES).join(", ") || "Ingen särskild";
+    case "calories": return p.calories.mode === "target" ? `${p.calories.kcal || "–"} kcal/dag` : "Nej, håll det enkelt";
+    case "allergies": return list(p.allergies, MP.ALLERGENS).join(", ") || "Inga allergier";
+    case "dislikes": return [...list(p.dislikes, MP.DISLIKES), ...p.dislikeCustom].join(", ") || "Inget";
+    case "pantry": return list(p.pantry, MP.PANTRY).join(", ") || "Inget valt";
+    case "budget": return p.budget ? `${p.budget.toLocaleString("sv-SE")} kr per vecka` : "Inte satt";
+  }
+  return "";
+}
+
+/* ---------- startkortet under Laga → Veckomeny ---------- */
+function renderMpEntry() {
+  const box = $("#mpEntry"); if (!box) return;
+  if (!MP) { box.innerHTML = ""; return; }
+  const p = PP();
+  if (!p.onboarded) {
+    const resume = p.step > 0;
+    box.innerHTML = `<div class="mphero"><span class="t-label">Nyhet</span><h2>Din personliga veckomatsedel</h2>
+      <p>Svara på 12 korta frågor om hushållet, så bygger vi en matsedel på veckans erbjudanden som håller er budget och era allergier.</p>
+      <div class="acts"><button class="btn press" type="button" id="mpStart">${icon("sparkles")}${resume ? `Fortsätt (steg ${p.step + 1} av ${MP.STEPS.length})` : "Kom igång"}</button></div></div>`;
+  } else {
+    const chips = [
+      p.stores.map(id => DATA.stores[id]?.name).filter(Boolean).join(" · "),
+      `${String(MP.portionsPerMeal(p)).replace(".", ",")} portioner`,
+      `${p.days.length} dagar × ${p.meals.length} måltider`,
+      p.diet !== "none" ? summarize("diet", p) : null,
+      p.allergies.length ? "Allergi: " + summarize("allergies", p) : null,
+      p.budget ? `${p.budget.toLocaleString("sv-SE")} kr/vecka` : null,
+    ].filter(Boolean);
+    box.innerHTML = `<div class="mphero"><span class="t-label">Veckomatsedel</span><h2>Dina val är klara</h2>
+      <div class="chips3">${chips.map(c => `<span>${esc(c)}</span>`).join("")}</div>
+      <div class="acts"><button class="btn press" type="button" id="mpMake">${icon("sparkles")}Skapa min vecka</button>
+        <button class="ghostbtn press" type="button" id="mpEdit">${icon("settings-2")}Ändra val</button></div></div>`;
+  }
+  icons();
+  const startBtn = $("#mpStart"); if (startBtn) startBtn.onclick = () => openOnb(PP().step || 0, "flow");
+  const edit = $("#mpEdit"); if (edit) edit.onclick = () => go("mpset");
+  const make = $("#mpMake"); if (make) make.onclick = () => toast("Själva planeringen kommer i nästa etapp. Dina val är sparade.");
+}
+
+/* ---------- onboarding ---------- */
+function openOnb(step, mode) { onbStep = Math.max(0, Math.min(MP.STEPS.length - 1, step)); onbMode = mode; pantryQ = ""; dislikeQ = ""; go("onb"); }
+
+function renderOnb() {
+  const sec = $("#s-onb"); if (!MP) { sec.innerHTML = ""; return; }
+  sec.innerHTML = `<div class="onb">
+    <div class="onbtop">
+      <button class="iconbtn press" type="button" id="onbBack" aria-label="Tillbaka">${icon("chevron-left")}</button>
+      <div class="prog" role="progressbar" aria-label="Framsteg" aria-valuemin="1" aria-valuemax="${MP.STEPS.length}"><span id="onbProg"></span></div>
+      <span class="onbcount" id="onbCount"></span>
+      <button class="iconbtn press" type="button" id="onbClose" aria-label="Stäng och spara">${icon("x")}</button>
+    </div>
+    <div id="onbBody"></div>
+  </div>
+  <div class="onbcta"><button class="btn press" type="button" id="onbNext"></button><button class="skip" type="button" id="onbSkip" hidden>Hoppa över</button></div>`;
+  $("#onbBack").onclick = onbBack;
+  $("#onbClose").onclick = () => go(onbMode === "edit" ? "mpset" : "cook");
+  $("#onbNext").onclick = onbNext;
+  $("#onbSkip").onclick = () => { pantryQ = ""; onbNext(true); };
+  renderOnbBody();
+}
+
+function onbBack() {
+  if (onbMode === "edit") return go("mpset");
+  if (onbStep === 0) return go("cook");
+  onbStep--; setPrefs({ step: onbStep }, false); renderOnbBody(); window.scrollTo({ top: 0 });
+}
+function onbNext() {
+  const id = MP.STEPS[onbStep], p = PP();
+  if (!MP.stepValid(id, p)) return;
+  if (onbMode === "edit") { toast("Sparat"); return go("mpset"); }
+  if (onbStep === MP.STEPS.length - 1) {
+    setPrefs({ onboarded: true, step: 0 }, false);
+    toast("Klart! Dina val är sparade för hela hushållet.");
+    return go("mpset");
+  }
+  onbStep++; setPrefs({ step: onbStep }, false); renderOnbBody(); window.scrollTo({ top: 0 });
+}
+
+function renderOnbBody() {
+  const body = $("#onbBody"); if (!body || !MP) return;
+  const id = MP.STEPS[onbStep], meta = STEP_META[id], n = MP.STEPS.length;
+  if (id === "budget" && !PP().budget) setPrefs({ budget: MP.budgetRange(PP()).suggested }, false);   // förslag innan knappen kontrolleras
+  const p = PP();
+  $("#onbProg").style.width = `${((onbStep + 1) / n) * 100}%`;
+  $("#onbProg").parentElement.setAttribute("aria-valuenow", onbStep + 1);
+  $("#onbCount").textContent = onbMode === "edit" ? "" : `${onbStep + 1} av ${n}`;
+  body.innerHTML = `<div class="onbbody"><div class="onbhead"><h1>${esc(meta.t)}</h1><p>${esc(meta.s)}</p></div>${stepHtml(id, p)}</div>`;
+  const next = $("#onbNext"), valid = MP.stepValid(id, p);
+  next.disabled = !valid;
+  next.innerHTML = onbMode === "edit" ? `${icon("check")}Spara` : onbStep === n - 1 ? `${icon("check")}Bekräfta` : id === "allergies" ? "Bekräfta och fortsätt" : "Nästa";
+  $("#onbSkip").hidden = !(id === "pantry" && onbMode === "flow");
+  icons();
+  wireStep(id);
+}
+
+function stepHtml(id, p) {
+  const today = new Date();
+  switch (id) {
+    case "stores": {
+      const counts = {}; OFFERS.forEach(o => { if (status(o, today) === "now" && !["ovrigt","hushall","hygien","djur"].includes(o.c)) counts[o.s] = (counts[o.s] || 0) + 1; });
+      return `<div class="ogrid">${Object.keys(DATA.stores).map(sid => `<button class="osel center press" type="button" data-store="${sid}" aria-pressed="${p.stores.includes(sid)}">${ck()}${storeLogo(sid)}
+        <b>${esc(DATA.stores[sid].name)}</b><small>${counts[sid] || 0} matvaror på kampanj idag</small></button>`).join("")}</div>
+        <p class="center-note">${p.stores.length ? `${p.stores.length} butiker valda` : "Välj minst en butik"}</p>`;
+    }
+    case "people": {
+      const row = (key, label, sub, val) => `<div class="counter"><div class="tx"><b>${label}</b><small>${sub}</small></div>
+        <div class="stepper" role="group" aria-label="${label}"><button type="button" data-cnt="${key}" data-d="-1" aria-label="Färre ${label.toLowerCase()}" ${val <= 0 ? "disabled" : ""}>${icon("minus")}</button>
+        <span>${val}</span><button type="button" class="plus" data-cnt="${key}" data-d="1" aria-label="Fler ${label.toLowerCase()}">${icon("plus")}</button></div></div>`;
+      const pm = MP.portionsPerMeal(p);
+      return `<div class="olist">${row("adults", "Vuxna", "Hel portion", p.adults)}${row("kids", "Barn", "Halv portion", p.kids)}
+        <div class="note">${icon("utensils")}<span><b>${String(pm).replace(".", ",")} portioner</b> per måltid</span></div></div>`;
+    }
+    case "meals":
+      return `<div class="olist">${MP.MEALS.map(m => `<button class="orow press" type="button" data-meal="${m.id}" aria-pressed="${p.meals.includes(m.id)}">
+        <span class="sw2" style="background:${MEAL_COLORS[m.id]};display:grid;place-items:center;color:var(--primary-ink)">${icon(MEAL_ICONS[m.id])}</span><span class="tx"><b>${m.label}</b><small>${m.desc}</small></span><span class="box">${icon("check")}</span></button>`).join("")}</div>`;
+    case "days":
+      return `<div class="daysrow">${MP.DAYS.map(d => `<button class="dayb press" type="button" data-day="${d.id}" aria-pressed="${p.days.includes(d.id)}" aria-label="${d.label}">${d.short}<span class="ck">${icon("check")}</span></button>`).join("")}</div>
+        <p class="center-note">${p.days.length ? `Planerar ${p.days.length} ${p.days.length === 1 ? "dag" : "dagar"} denna vecka` : "Välj minst en dag"}</p>`;
+    case "kitchen":
+      return `<div class="ogrid">${MP.APPLIANCES.map(a => `<button class="osel center press" type="button" data-app="${a.id}" aria-pressed="${p.appliances.includes(a.id)}">${ck()}
+        <span class="oi">${icon(a.icon)}</span><b>${a.label}</b></button>`).join("")}</div>
+        <p class="center-note">${p.appliances.length} av ${MP.APPLIANCES.length} valda</p>`;
+    case "diet":
+      return `<div class="ogrid" role="radiogroup" aria-label="Kost">${MP.DIETS.map(d => `<button class="osel press" type="button" role="radio" data-diet="${d.id}" aria-checked="${p.diet === d.id}">${ck()}
+        <span class="oi">${icon(d.icon)}</span><b>${d.label}</b><small>${d.desc}</small></button>`).join("")}</div>`;
+    case "vibe":
+      return `<div class="ogrid">${MP.VIBES.map(v => `<button class="osel press" type="button" data-vibe="${v.id}" aria-pressed="${p.vibes.includes(v.id)}">${ck()}
+        <span class="oi">${icon(v.icon)}</span><b>${v.label}</b><small>${v.desc}</small></button>`).join("")}</div>`;
+    case "calories": {
+      const c = p.calories, tgt = c.mode === "target";
+      const f = (k, label, unit) => `<label class="field" for="cal-${k}">${label} (${unit})<input type="number" inputmode="numeric" id="cal-${k}" data-cal="${k}" value="${c[k] ?? ""}" placeholder="${{ kcal: "t.ex. 2200", protein: "valfritt", carbs: "valfritt", fat: "valfritt" }[k]}"></label>`;
+      return `<div class="olist" role="radiogroup" aria-label="Kalorimål">
+        <button class="orow press" type="button" role="radio" data-calmode="simple" aria-checked="${!tgt}" aria-pressed="${!tgt}"><span class="sw2" style="background:var(--mint);display:grid;place-items:center;color:var(--success)">${icon("utensils")}</span>
+          <span class="tx"><b>Nej, håll det enkelt</b><small>Balanserade, mättande måltider utan siffror</small></span><span class="box">${icon("check")}</span></button>
+        <button class="orow press" type="button" role="radio" data-calmode="target" aria-checked="${tgt}" aria-pressed="${tgt}"><span class="sw2" style="background:var(--peach);display:grid;place-items:center;color:var(--primary)">${icon("dumbbell")}</span>
+          <span class="tx"><b>Ja, jag har ett mål</b><small>Kalorier, och gärna protein, kolhydrater och fett</small></span><span class="box">${icon("check")}</span></button></div>
+        ${tgt ? `<div class="calf">${f("kcal", "Kalorier", "kcal")}${f("protein", "Protein", "g")}${f("carbs", "Kolhydrater", "g")}${f("fat", "Fett", "g")}</div>
+          <p class="center-note">Per vuxen och dag. Näringsvärdena i planen är uppskattningar.</p>` : ""}`;
+    }
+    case "allergies": {
+      const none = !p.allergies.length;
+      return `<div class="ogrid"><button class="osel press" type="button" data-allergy="none" aria-pressed="${none}" style="grid-column:1/-1;min-height:72px">${ck()}
+        <b>Inga allergier</b><small>Inget behöver uteslutas</small></button>
+        ${MP.ALLERGENS.map(a => `<button class="osel press" type="button" data-allergy="${a.id}" aria-pressed="${p.allergies.includes(a.id)}" style="min-height:72px">${ck()}<b>${a.label}</b><small>Tryck för att utesluta</small></button>`).join("")}</div>
+        ${none ? "" : `<div class="note warn" style="margin-top:14px">${icon("shield-alert")}<span>Vi tar bort ${esc(summarize("allergies", p).toLowerCase())} och färdigprodukter med okänt innehåll. Kontrollera alltid innehållsförteckningen i butiken.</span></div>`}`;
+    }
+    case "dislikes": {
+      const q = MP.normalize(dislikeQ);
+      const shown = MP.DISLIKES.filter(d => !q || MP.normalize(d.label).includes(q));
+      return `<label class="srch" for="dislikeQ">${icon("search")}<input id="dislikeQ" type="search" placeholder="Sök eller skriv en råvara" value="${esc(dislikeQ)}" autocomplete="off"></label>
+        ${q && !shown.length ? `<button class="ghostbtn press" type="button" id="addCustom" style="margin-bottom:14px">${icon("plus")}Lägg till "${esc(dislikeQ.trim())}"</button>` : ""}
+        <div class="chipwrap">${shown.map(d => `<button class="chip plain press" type="button" data-dislike="${d.id}" aria-pressed="${p.dislikes.includes(d.id)}">${p.dislikes.includes(d.id) ? icon("x") : ""}${esc(d.label)}</button>`).join("")}
+        ${p.dislikeCustom.map((c, i) => `<button class="chip plain press" type="button" data-custom="${i}" aria-pressed="true">${icon("x")}${esc(c)}</button>`).join("")}</div>`;
+    }
+    case "pantry": {
+      const q = MP.normalize(pantryQ);
+      const items = MP.PANTRY.filter(it => (pantryTab === "all" || it.cat === pantryTab) && (!q || MP.normalize(it.label).includes(q)));
+      return `<label class="srch" for="pantryQ">${icon("search")}<input id="pantryQ" type="search" placeholder="Sök råvara" value="${esc(pantryQ)}" autocomplete="off"></label>
+        <div class="tabs2 noscroll">${MP.PANTRY_TABS.map(([k, l]) => `<button class="chip plain press" type="button" data-ptab="${k}" aria-pressed="${pantryTab === k}">${l}</button>`).join("")}</div>
+        <div class="ogrid three" id="pantryGrid">${items.map(it => `<button class="pcard press" type="button" data-pantry="${it.id}" aria-pressed="${p.pantry.includes(it.id)}"><span class="ck">${icon("check")}</span>
+          <span class="oi">${icon(it.icon)}</span>${esc(it.label)}</button>`).join("") || `<p class="status" style="grid-column:1/-1">Inget hittades.</p>`}</div>
+        <p class="center-note">${p.pantry.length ? `${p.pantry.length} saker hemma` : "Salt, peppar, olja och vatten räknar vi alltid med att ni har."}</p>`;
+    }
+    case "budget": {
+      const r = MP.budgetRange(p), b = p.budget || r.suggested;
+      return `<div class="bigamt"><input id="budgetIn" type="text" inputmode="numeric" value="${b}" aria-label="Budget i kronor per vecka"><span>kr</span></div>
+        <p class="bighint">per vecka · tryck på beloppet för att skriva in ett exakt värde</p>
+        <input class="range" id="budgetRange" type="range" min="${r.min}" max="${r.max}" step="50" value="${Math.min(r.max, Math.max(r.min, b))}" aria-label="Budget">
+        <div class="rlabels"><span>${r.min.toLocaleString("sv-SE")} kr</span><span>${r.max.toLocaleString("sv-SE")} kr</span></div>
+        <div id="budgetInfo">${budgetInfo(p, b)}</div>`;
+    }
+  }
+  return "";
+}
+
+/* Infokortet under budgeten. Före planen finns: uppskattning från portioner och kost. */
+function budgetInfo(p, b) {
+  const portions = MP.portionsPerWeek(p);
+  const per = DIET_EST[p.diet] || 32;
+  const est = Math.round(portions * per / 10) * 10, diff = b - est;
+  return `<div class="note ${diff < 0 ? "warn" : ""}" style="margin-top:16px">${icon(diff < 0 ? "triangle-alert" : "piggy-bank")}<span>${diff >= 0
+      ? `<b>Gott om utrymme.</b> Du har ca ${Math.abs(diff).toLocaleString("sv-SE")} kr till godo mot vad en sådan vecka brukar kosta.`
+      : `<b>Snäv budget.</b> En sådan vecka brukar kosta ca ${Math.abs(diff).toLocaleString("sv-SE")} kr mer. Planen prioriterar då de billigaste erbjudandena.`}</span></div>
+    <div class="ktiles"><div class="ktile"><b>ca ${est.toLocaleString("sv-SE")}</b><small>kr/vecka</small></div>
+      <div class="ktile"><b>ca ${portions ? Math.round(b / portions) : 0}</b><small>kr/portion</small></div>
+      <div class="ktile"><b>${String(portions).replace(".", ",")}</b><small>portioner/vecka</small></div></div>
+    <p class="center-note">Uppskattning tills planen är skapad. Då räknar vi på de riktiga priserna.</p>`;
+}
+
+function wireStep(id) {
+  const body = $("#onbBody"), p = PP();
+  const toggle = (arr, v) => arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
+  body.onclick = e => {
+    const t = e.target.closest("button"); if (!t) return;
+    const d = t.dataset;
+    if (d.store) setPrefs({ stores: toggle(PP().stores, d.store) });
+    else if (d.cnt) setPrefs({ [d.cnt]: Math.max(0, Math.min(12, PP()[d.cnt] + Number(d.d))) });
+    else if (d.meal) setPrefs({ meals: toggle(PP().meals, d.meal) });
+    else if (d.day) setPrefs({ days: toggle(PP().days, d.day) });
+    else if (d.app) setPrefs({ appliances: toggle(PP().appliances, d.app) });
+    else if (d.diet) setPrefs({ diet: d.diet });
+    else if (d.vibe) setPrefs({ vibes: toggle(PP().vibes, d.vibe) });
+    else if (d.calmode) setPrefs({ calories: { ...PP().calories, mode: d.calmode } });
+    else if (d.allergy) setPrefs({ allergies: d.allergy === "none" ? [] : toggle(PP().allergies, d.allergy) });
+    else if (d.dislike) setPrefs({ dislikes: toggle(PP().dislikes, d.dislike) });
+    else if (d.custom != null) setPrefs({ dislikeCustom: PP().dislikeCustom.filter((_, i) => i !== Number(d.custom)) });
+    else if (d.ptab) { pantryTab = d.ptab; renderOnbBody(); }
+    else if (d.pantry) setPrefs({ pantry: toggle(PP().pantry, d.pantry) });
+    else if (t.id === "addCustom") addCustomDislike();
+  };
+  if (id === "calories") body.querySelectorAll("[data-cal]").forEach(inp => inp.addEventListener("input", () => {
+    setPrefs({ calories: { ...PP().calories, [inp.dataset.cal]: inp.value } }, false);
+    $("#onbNext").disabled = !MP.stepValid("calories", PP());
+  }));
+  if (id === "dislikes") {
+    const q = $("#dislikeQ");
+    q.addEventListener("input", () => { dislikeQ = q.value; const pos = q.selectionStart; renderOnbBody(); const n = $("#dislikeQ"); n.focus(); n.setSelectionRange(pos, pos); });
+    q.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addCustomDislike(); } });
+  }
+  if (id === "pantry") {
+    const q = $("#pantryQ");
+    q.addEventListener("input", () => { pantryQ = q.value; const pos = q.selectionStart; renderOnbBody(); const n = $("#pantryQ"); n.focus(); n.setSelectionRange(pos, pos); });
+  }
+  if (id === "budget") {
+    const inp = $("#budgetIn"), rng = $("#budgetRange");
+    const apply = (v, from) => {
+      const n = Math.max(0, Math.round(Number(String(v).replace(/[^\d]/g, "")) || 0));
+      if (from !== "in") inp.value = n;
+      if (from !== "range") rng.value = n;
+      setPrefs({ budget: n || null }, false);
+      $("#budgetInfo").innerHTML = budgetInfo(PP(), n); icons();
+      $("#onbNext").disabled = !MP.stepValid("budget", PP());
+    };
+    rng.addEventListener("input", () => apply(rng.value, "range"));
+    inp.addEventListener("input", () => apply(inp.value, "in"));
+    inp.addEventListener("focus", () => inp.select());
+  }
+}
+
+function addCustomDislike() {
+  const v = dislikeQ.trim(); if (v.length < 3) return;
+  const p = PP();
+  const known = MP.DISLIKES.find(d => MP.normalize(d.label) === MP.normalize(v));
+  if (known) setPrefs({ dislikes: p.dislikes.includes(known.id) ? p.dislikes : [...p.dislikes, known.id] }, false);
+  else if (!p.dislikeCustom.map(MP.normalize).includes(MP.normalize(v))) setPrefs({ dislikeCustom: [...p.dislikeCustom, v] }, false);
+  dislikeQ = ""; renderOnbBody(); $("#dislikeQ")?.focus();
+}
+
+/* ---------- inställningar: alla svar, varje går att ändra ---------- */
+function renderMpSettings() {
+  const sec = $("#s-mpset"); if (!MP) { sec.innerHTML = ""; return; }
+  const p = PP();
+  sec.innerHTML = `<header class="titlebar">
+      <button class="iconbtn press" type="button" data-go="cook" aria-label="Tillbaka">${icon("chevron-left")}</button>
+      <h1 class="t-screen">Dina val</h1><span></span></header>
+    <p class="status" style="text-align:center;margin:-6px 0 14px">Gäller hela hushållet och sparas automatiskt.</p>
+    <div class="lgroup" style="padding:4px 14px">${MP.STEPS.map((id, i) => `<button class="setrow press" type="button" data-edit="${i}">
+      <span class="oi">${icon(STEP_META[id].icon)}</span><span class="tx"><b>${esc(STEP_META[id].t)}</b><small>${esc(summarize(id, p))}</small></span>${icon("chevron-right")}</button>`).join("")}</div>
+    ${p.onboarded ? `<button class="btn press" type="button" id="mpsetMake" style="width:100%;height:52px;margin-top:6px">${icon("sparkles")}Skapa min vecka</button>`
+      : `<button class="btn press" type="button" id="mpsetResume" style="width:100%;height:52px;margin-top:6px">Fortsätt frågorna</button>`}`;
+  icons();
+  sec.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => openOnb(Number(b.dataset.edit), "edit"));
+  const m = $("#mpsetMake"); if (m) m.onclick = () => toast("Själva planeringen kommer i nästa etapp. Dina val är sparade.");
+  const r = $("#mpsetResume"); if (r) r.onclick = () => openOnb(p.step || 0, "flow");
+}
+
 /* ================= start ================= */
 async function boot(){
   $("#grid").innerHTML = skeletons(6);
@@ -1322,7 +1756,8 @@ async function boot(){
   if (lastDish?.data) { $("#dname").value = lastDish.dish || ""; renderDish(lastDish.data, lastDish.thumb); $("#dstatus").textContent = "Senaste sökningen. Skriv en ny maträtt för att jämföra igen."; }
   setCook(st.cook || "r");
   updateBadges();
-  go(["favs","cook","list"].includes(st.screen) ? st.screen : "home");
+  go(["favs","cook","list","mpset"].includes(st.screen) ? st.screen : "home");
+  initPrefs();
 }
 icons();
 initShared();

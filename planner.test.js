@@ -70,6 +70,25 @@
     t("Kost", "keto: lax tillåts", () => eq(diet("Laxfilé", "keto"), null));
     t("Kost", "keto: jordnötter i godiskategori tillåts", () => eq(diet("Kims jordnötter", "keto", "godis"), null));
     t("Kost", "inga restriktioner: allt tillåts", () => eq(diet("Bacon", "none"), null));
+    for (const x of ["REMA 1000 frilandsgris", "Citterio italiensk charkuteri", "Hel fasan", "Frigående gås", "Vitasia gyoza",
+      "Eridanous moussaka", "Mou soppa", "Fredagstapas", "Torsdags-smörrebröd", "Dr. Oetker Ristorante pizza", "Salling Princip fylld pasta",
+      "Mårtensafton (meny)", "Chef Select vårrullar", "Vitasia asiatiska färdigrätter", "Burgerboost", "Gestus topping",
+      "Fond eller REMA 1000 sås", "Malaco godispåse"]) {
+      t("Kost", `vegetariskt: "${x}" stoppas`, () => ok(diet(x, "vegetarian"), `${x} borde stoppas`));
+    }
+    for (const x of ["Hälsans Kök falafel", "Freshona grönsaksblandning", "Pizzabotten", "Grönsakslasagne", "Grissini", "Mutti pizzasås",
+      "Lasagneplattor"]) {
+      t("Kost", `vegetariskt: "${x}" tillåts`, () => eq(diet(x, "vegetarian"), null));
+    }
+    t("Kost", "veganskt: grönsakslasagne stoppas (kan innehålla mjölk)", () => ok(diet("Grönsakslasagne", "vegan")));
+    t("Kost", "pescetariskt: fiskgratäng-paj med fisk tillåts, okänd färdigrätt stoppas", () => {
+      eq(diet("Laxpaj", "pescetarian"), null); ok(diet("Vitasia indisk färdigrätt", "pescetarian"));
+    });
+    t("Allergener", "färdigprodukt med okänt innehåll stoppas vid allergi", () =>
+      ok(P.violations({ text: "Vitasia asiatiska färdigrätter" }, prefs({ allergies: ["nuts"] })).some(v => v.id === "okant")));
+    t("Allergener", "färdigprodukt tillåts utan allergier", () => eq(P.violations({ text: "Vitasia asiatiska färdigrätter" }, prefs({})), []));
+    t("Filter", "non-food i matkategori tas bort", () =>
+      eq(P.filterOffers([offer("x", "netto", "Duracell batterier", "torr"), offer("y", "netto", "Rummo pasta", "torr")], prefs({}), NOW).ok.map(o => o.id), ["y"]));
     t("Kost", "växtbaserat ord i beskrivningen släpper inte igenom kött", () => {
       const o = { sv: "Krokmörad dansk fläskstek", n: "Flæskesteg", d: "Server med vegansk sauce", c: "kott" };
       ok(P.violations({ text: P.offerText(o), name: P.offerName(o), cat: o.c }, prefs({ diet: "vegetarian" })).length > 0);
