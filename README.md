@@ -14,6 +14,12 @@ Appen visar veckans erbjudanden från butikerna vi handlar i, i Köpenhamn:
 - **Var ska jag handla?**: skriv en maträtt, t.ex. "Tuna melt", eller bifoga en bild på rätten, så visas för varje ingrediens var den är billigast och var kvaliteten är bäst den här veckan. Appen räknar ut bästa butiken för hela handlingen, hur mycket du sparar på att dela upp den och var kvaliteten är bäst.
 - **Veckomeny**: planerar 3–7 middagar på dagens erbjudanden, återanvänder ingredienser mellan dagarna och lägger hela veckans handling på listan med ett tryck. Menyn delas med hushållet.
 - **Prishistorik**: varje vecka sparas kampanjpriserna per vara och butik. Korten märks "Bästa pris" eller "Billigare v. 44", och produktsidan visar en graf över tidigare kampanjpriser.
+- **Personlig veckomatsedel** (Laga → Veckomeny):
+  - 12 korta frågor om hushållet: butiker, vem som äter, måltider, dagar, köksutrustning, kost, stil, kalorimål, allergier, ogillade råvaror, vad som finns hemma och veckobudget. Svaren gäller hela hushållet och kan ändras under "Dina val".
+  - Planen byggs på dagens erbjudanden i de valda butikerna: först en skiss för hela veckan (så att råvaror återanvänds och budgeten hålls), sedan recepten. Varje recept kontrolleras mot allergier, kost, ogillade råvaror och utrustning innan det visas.
+  - "Din vecka är klar!": spenderat av budget, sparat minst X kr, inköpslista, måltider per dag och "Byt" som ersätter en rätt med en annan som klarar samma krav.
+  - Receptsida med portionsväljare, g/ml-omvandling, makron, betyg, "Markera som lagad", sparade recept och fokusläget "Laga steg för steg".
+  - Veckans inköp: summerat över veckan, det som finns hemma avdraget och billigare butik med "Byt".
 - **Delad inköpslista**, grupperad per butik och med en summa.
 
 ## Filer

@@ -363,6 +363,11 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 .dayh .muted{font-weight:500;font-size:14px}
 .meal{background:#fff;border-radius:20px;box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden}
 .mflex,.mhead{display:flex;align-items:center;gap:12px;padding:12px;width:100%;text-align:left}
+.mopen{display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-align:left}
+.swapbtn{flex:none;display:inline-flex;align-items:center;gap:5px;height:36px;padding:0 12px;border-radius:var(--r-pill);background:var(--peach);color:var(--primary-ink);font-weight:700;font-size:13px}
+.swapbtn svg.lucide{width:15px;height:15px}
+.swapbtn.undo{background:var(--text);color:#fff}
+.swapbtn:disabled{opacity:.5}
 .mimg{width:64px;height:64px;border-radius:16px;background:var(--bg-card);display:grid;place-items:center;flex:none;position:relative;overflow:hidden;color:var(--primary)}
 .mimg img{width:88%;height:88%;object-fit:contain;opacity:0;transition:opacity .25s}
 .mimg img.ok{opacity:1}
@@ -1762,7 +1767,7 @@ const dlong = d => { const days = Math.round((new Date(d).setHours(0,0,0,0) - ne
 const icon = (n, extra="") => `<i data-lucide="${n}"${extra}></i>`;
 const icons = () => { try { window.lucide?.createIcons({ attrs: { "stroke-width": 1.75 } }); } catch {} };
 const store = { get(k,f){ try{ const v = localStorage.getItem(k); return v == null ? f : JSON.parse(v); } catch { return f; } }, set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
-let toastT; function toast(msg){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 1800); }
+let toastT; function toast(msg, ms = 1800){ const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, ms); }
 
 let DATA = null, OFFERS = [], BYID = {};
 const st = Object.assign({ screen:"home", cat:"all", when:"all", sort:"save", nonfood:false, nomember:false, stores:null, cook:"r" }, store.get("vt.ui", {}));
@@ -2490,7 +2495,8 @@ function renderMpEntry() {
     const days = PLAN ? [...new Set(PLAN.slots.map(x => x.date))] : [];
     const range = days.length ? `${dateOf(days[0]).getDate()}/${dateOf(days[0]).getMonth() + 1}–${dateOf(days[days.length - 1]).getDate()}/${dateOf(days[days.length - 1]).getMonth() + 1}` : "";
     box.innerHTML = `<div class="mphero"><span class="t-label">Veckomatsedel${range ? ` · ${range}` : ""}</span>
-      <h2>${BUILD && !BUILD.error ? "Din vecka skapas …" : PLAN?.status === "accepted" ? "Veckans matsedel" : "Ett förslag väntar"}</h2>
+      <h2>${BUILD && !BUILD.error ? "Din vecka skapas …" : planExpired() ? "Förra veckans matsedel" : PLAN?.status === "accepted" ? "Veckans matsedel" : "Ett förslag väntar"}</h2>
+      ${planExpired() && !BUILD ? `<p>Alla dagar i planen har passerat. Skapa en ny vecka med de senaste erbjudandena.</p>` : ""}
       ${c ? `<div class="chips3"><span>${PLAN.slots.filter(x => x.recipe).length} måltider</span><span>${c.est > 0 ? "ca " : ""}${krR(c.total)} av ${krR(p.budget)}</span>${c.savingMin > 0 ? `<span>Sparat minst ${krR(c.savingMin)}</span>` : ""}</div>` : ""}
       <div class="acts"><button class="btn press" type="button" id="mpShow">${icon("calendar-days")}${BUILD && !BUILD.error ? "Visa förloppet" : "Visa veckan"}</button>
         ${BUILD && !BUILD.error ? "" : `<button class="ghostbtn press" type="button" id="mpNew">${icon("refresh-cw")}Ny vecka</button>`}
@@ -2749,7 +2755,6 @@ function renderMpSettings() {
 /* ================= veckomatsedel: planering och "Din vecka är klar!" ================= */
 let PLAN = store.get("vt.plan", null), planDoc = null, planCtl = null;
 let BUILD = null;          // { phase, done, total, error } medan planen skapas
-let openSlot = null;       // vilken rätt som är utfälld
 let replaceArmed = 0;      // tidpunkt för första klicket på "Skapa ny vecka"
 
 const DAY_SHORT = ["SÖN", "MÅN", "TIS", "ONS", "TOR", "FRE", "LÖR"];
@@ -2802,7 +2807,7 @@ async function generatePlan() {
   const ctx = { prefs: p, offers, stores: DATA.stores };
   planCtl = new AbortController(); const signal = planCtl.signal;
   BUILD = { phase: "Planerar veckan …", done: 0, total: sl.length, error: null };
-  openSlot = null; go("plan");
+  go("plan");
   try {
     // 1. Skiss för hela veckan
     const sk = await sampleFn.json(MP.skeletonPrompt({ ...ctx, slots: sl }), { signal, cache: false });
@@ -2971,6 +2976,8 @@ function renderPlan() {
   on("#planDone", () => { setCook("m"); go("cook"); });
   sec.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => { const s = PLAN.slots[+b.dataset.slot]; if (s?.recipe) openRecipe({ recipe: s.recipe, offers: PLAN.offers, slot: s.i, from: "plan" }); });
   sec.querySelectorAll("[data-retry]").forEach(b => b.onclick = e => { e.stopPropagation(); retrySlot(+b.dataset.retry); });
+  sec.querySelectorAll("[data-swapslot]").forEach(b => b.onclick = () => swapSlot(+b.dataset.swapslot));
+  sec.querySelectorAll("[data-undo]").forEach(b => b.onclick = () => undoSwap(+b.dataset.undo));
 }
 
 function mealRow(s, offs, plan) {
@@ -2985,21 +2992,55 @@ function mealRow(s, offs, plan) {
       <small>${s.error ? esc(s.error) : s.busy ? "Skapar ett nytt recept …" : "Skrivs …"}</small></span>
       ${s.error && !BUILD ? `<button class="ghostbtn press" type="button" data-retry="${s.i}" style="height:36px;padding:0 12px;font-size:13px">${icon("refresh-cw")}Försök igen</button>` : ""}</div></div>`;
   }
-  const open = openSlot === s.i, cost = MP.recipeCost(r, PP(), offs);
+  const cost = MP.recipeCost(r, PP(), offs);
   const meta = [r.time_min ? `${r.time_min} min` : null, r.kcal ? `ca ${r.kcal} kcal` : null, `ca ${krR(cost.perPortion)}/port.`].filter(Boolean).join(" · ");
-  return `<div class="meal ${open ? "open" : ""}" style="--bg-card:${bg}">
-    <button class="mhead press" type="button" data-slot="${s.i}" aria-expanded="${open}">
-      <span class="mimg">${o ? imgTag(o) : ""}<span class="ph">${icon(CATICON[o?.c] || "utensils")}</span></span>
-      <span class="mtx"><span class="t-label muted">${label}</span><b>${esc(r.title)}</b><small>${esc(meta)}</small></span>${icon("chevron-right")}</button>
-    ${open ? `<div class="mbody">${r.description ? `<p class="dtext" style="margin:0">${esc(r.description)}</p>` : ""}
-      <h4 class="mh">Ingredienser · ${String(MP.portionsPerMeal(PP())).replace(".", ",")} portioner</h4>
-      <ul class="ing">${r.ingredients.map(i => { const io = i.offer_id ? offs[i.offer_id] : null;
-        return `<li><div class="in"><div>${esc(i.name)}</div><div class="sub">${esc(i.amount)}${i.pantry ? " · finns oftast hemma" : ""}</div>
-          ${io ? `<div class="deal">${storeChip(io.s)}<span>${esc(kr(io.p))}</span></div>` : ""}</div></li>`; }).join("")}</ul>
-      <h4 class="mh">Gör så här</h4><ol class="steps">${r.steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
-      ${r.kcal ? `<p class="status" style="margin:0">Per vuxen portion ca ${r.kcal} kcal${r.protein ? ` · ${r.protein} g protein · ${r.carbs ?? "–"} g kolhydrater · ${r.fat ?? "–"} g fett` : ""} (uppskattning)</p>` : ""}</div>` : ""}
-  </div>`;
+  const canUndo = s.prev && (s.prevUntil || 0) > Date.now();
+  return `<div class="meal" style="--bg-card:${bg}"><div class="mflex">
+    <button class="mopen press" type="button" data-slot="${s.i}" aria-label="Öppna receptet ${esc(r.title)}">
+      <span class="mimg">${s.busy ? `<span class="spin"></span>` : `${o ? imgTag(o) : ""}<span class="ph">${icon(CATICON[o?.c] || "utensils")}</span>`}</span>
+      <span class="mtx"><span class="t-label muted">${label}</span><b>${esc(r.title)}</b><small>${s.busy ? "Letar efter en annan rätt …" : esc(meta)}</small></span></button>
+    ${BUILD && !BUILD.error ? "" : canUndo
+      ? `<button class="swapbtn undo press" type="button" data-undo="${s.i}" aria-label="Ångra bytet">${icon("undo-2")}Ångra</button>`
+      : `<button class="swapbtn press" type="button" data-swapslot="${s.i}" ${s.busy ? "disabled" : ""} aria-label="Byt ${esc(r.title)} mot en annan rätt">${icon("shuffle")}Byt</button>`}
+  </div></div>`;
 }
+
+/* ---------- "Byt": ett annat recept för samma plats, samma krav ---------- */
+async function swapSlot(i) {
+  if (!PLAN || (BUILD && !BUILD.error)) return;
+  if (!sampleFn) { toast("Byt fungerar när appen är öppen i Claude."); return; }
+  const slot = PLAN.slots[i]; if (!slot || slot.busy) return;
+  const p = PP(), offers = MP.planOffers(OFFERS, p);
+  const allowedIds = new Set(offers.map(o => o.id)), byId = Object.fromEntries(offers.map(o => [o.id, o]));
+  const before = planCostNow(PLAN)?.total || 0, old = slot.recipe;
+  // undvik rätten som byts bort, tidigare bortbytta rätter på platsen och veckans övriga rätter
+  const avoid = [...new Set([...(slot.swapped || []), old?.title, ...PLAN.slots.filter(x => x.i !== i && x.recipe).map(x => x.recipe.title)].filter(Boolean))].slice(-20);
+  const skeleton = PLAN.slots.map(x => ({ i: x.i, day: x.day, date: x.date, meal: x.meal, title: x.recipe?.title || x.title }));
+  slot.busy = true; renderPlan();
+  try {
+    const r = await singleRecipe(slot, skeleton, { prefs: p, offers, stores: DATA.stores }, byId, allowedIds, "", undefined, avoid);
+    slot.busy = false;
+    if (r.recipe) {
+      slot.prev = old; slot.prevUntil = Date.now() + 20000;
+      slot.swapped = [...(slot.swapped || []), old?.title].filter(Boolean).slice(-10);
+      slot.recipe = r.recipe; slot.error = null;
+      PLAN.offers = { ...(PLAN.offers || {}), ...MP.snapshotOffers({ slots: [slot] }, byId) };
+      savePlan();
+      const d = (planCostNow(PLAN)?.total || 0) - before;
+      toast(`Bytt till ${r.recipe.title}. ${Math.abs(d) < 1 ? "Samma kostnad." : d < 0 ? `Veckan blev ${krR(-d)} billigare.` : `Veckan blev ${krR(d)} dyrare.`}`, 3500);
+      setTimeout(() => { if (st.screen === "plan") renderPlan(); }, 20500);
+    } else toast(r.error, 3500);
+  } catch (e) { slot.busy = false; toast(errText(e?.code), 3500); }
+  if (st.screen === "plan") renderPlan();
+}
+function undoSwap(i) {
+  const s2 = PLAN?.slots[i]; if (!s2?.prev) return;
+  s2.recipe = s2.prev; s2.prev = null; s2.prevUntil = 0; s2.swapped = (s2.swapped || []).slice(0, -1);
+  savePlan(); renderPlan(); toast("Ångrat");
+}
+
+// sant när planens sista dag har passerat
+function planExpired() { if (!PLAN?.slots?.length) return false; const last = PLAN.slots[PLAN.slots.length - 1].date; return last < new Date().toISOString().slice(0, 10); }
 
 function askNewPlan() {
   if (PLAN && Date.now() - replaceArmed > 4000) { replaceArmed = Date.now(); toast("Tryck igen för att ersätta veckans plan med en ny."); return; }
@@ -3065,7 +3106,8 @@ function renderRecipe() {
       ${main?.im ? `<img id="rImg" class="${main.im === 2 ? "cut" : "tile"}" alt="">` : ""}<span class="ph">${icon(CATICON[main?.c] || "chef-hat")}</span>
     </div>
     <div class="dbody">
-      <div><h1 class="t-screen">${esc(r.title)}</h1>${r.description ? `<p class="dtext" style="margin-top:6px">${esc(r.description)}</p>` : ""}</div>
+      <div><h1 class="t-screen">${esc(r.title)}</h1>${r.description ? `<p class="dtext" style="margin-top:6px">${esc(r.description)}</p>` : ""}
+        ${RCTX.from === "plan" && RCTX.slot != null ? `<button class="swapbtn press" type="button" id="rSwap" style="margin-top:10px">${icon("shuffle")}Byt den här rätten</button>` : ""}</div>
       <div class="ractions">
         <button class="ract press" type="button" id="rSave" aria-pressed="${saved}"><span>${icon(saved ? "bookmark-check" : "bookmark")}</span>${saved ? "Sparat" : "Spara"}</button>
         <button class="ract press" type="button" id="rToPlan"><span>${icon("calendar-plus")}</span>Lägg i matsedel</button>
@@ -3107,6 +3149,7 @@ function renderRecipe() {
   on("#rBack", () => go(RCTX.from === "plan" ? "plan" : "cook"));
   on("#rSave", () => { if (BOOK.saved[key]) delete BOOK.saved[key]; else BOOK.saved[key] = { ...r, savedAt: Date.now(), offers: MP.snapshotOffers({ slots: [{ recipe: r }] }, offs) }; saveBook(); toast(BOOK.saved[key] ? "Sparat bland hushållets recept" : "Borttaget från sparade"); renderRecipe(); });
   on("#rToPlan", openSlotSheet);
+  on("#rSwap", () => { const i = RCTX.slot; go("plan"); swapSlot(i); });
   on("#rToList", () => recipeToList(r, offs));
   on("#rShare", () => shareRecipe(r, factor)); on("#rShareTop", () => shareRecipe(r, factor));
   on("#rCooked", () => { const cur = BOOK.ratings[key] || {}; BOOK.ratings[key] = { ...cur, cookedAt: cur.cookedAt ? null : Date.now() }; saveBook(); renderRecipe(); });

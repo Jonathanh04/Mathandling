@@ -269,6 +269,11 @@
       const snap = P.snapshotOffers({ slots: [{ recipe: { main_offer_id: "b", ingredients: [{ name: "broccoli", offer_id: "b" }, { name: "lök" }] } }] }, pOffers);
       eq(Object.keys(snap), ["b"]); eq(snap.b.p, 20);
     });
+    t("Planering", "Byt: prompten nämner rätter som ska undvikas och platsen", () => {
+      const pr = P.singleRecipePrompt({ prefs: planPrefs, offers: [], stores: {}, slot: { day: "tue", date: "2026-11-17", meal: "dinner" },
+        skeleton: [{ day: "mon", meal: "dinner", title: "Lasagne" }], avoidTitles: ["Kycklinggryta", "Lasagne"] });
+      ok(pr.includes("Föreslå INTE något av detta: Kycklinggryta; Lasagne")); ok(pr.includes("Tisdag 2026-11-17 – Middag")); ok(pr.includes("Nötter"));
+    });
     t("Planering", "pool kör högst två jobb samtidigt och behåller ordningen", async () => {
       let active = 0, peak = 0;
       const r = await P.pool([1, 2, 3, 4, 5], 2, async x => { active++; peak = Math.max(peak, active); await Promise.resolve(); active--; return x * 10; });
