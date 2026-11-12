@@ -547,6 +547,31 @@
     return out;
   }
 
+  /* Planens platser inklusive matlåda: med vibe "Matlåda" lagas middagen i dubbel sats (mult 2) och nästa dags
+     lunch blir rester (leftoverOf = middagens index). En vald lunch ersätts; annars läggs lunchen till (extra). */
+  function planSlots(p, start = new Date()) {
+    const out = slots(p, start).map(s => ({ ...s }));
+    const batch = (p.vibes || []).includes("batch") && (p.meals || []).includes("dinner");
+    if (batch) {
+      for (const d of out.filter(x => x.meal === "dinner")) {
+        d.mult = 2;
+        const nd = new Date(d.date + "T12:00:00"); nd.setDate(nd.getDate() + 1);
+        const date = nd.toISOString().slice(0, 10), day = DAYS[(nd.getDay() + 6) % 7].id;
+        const lunch = out.find(x => x.date === date && x.meal === "lunch");
+        if (lunch) lunch.leftover = d; else out.push({ day, date, meal: "lunch", leftover: d, extra: true });
+      }
+    }
+    const order = id => MEALS.findIndex(m => m.id === id);
+    out.sort((a, b) => a.date.localeCompare(b.date) || order(a.meal) - order(b.meal));
+    out.forEach((s, i) => { s.i = i; });
+    out.forEach(s => { if (s.leftover) { s.leftoverOf = s.leftover.i; delete s.leftover; } });
+    return out;
+  }
+
+  /* Längsta tillåtna tid per rätt (min) utifrån vald stil, eller null. */
+  const QUICK_MAX = 30;
+  const timeLimit = p => (p.vibes || []).includes("quick") ? QUICK_MAX : null;
+
   /* ------------------------------------------------------------------ */
   /* 4. Mängder och enheter                                               */
   /* ------------------------------------------------------------------ */
@@ -655,6 +680,12 @@
     return { exact: round2(exact), est: round2(est), total: round2(exact + est), perPortion: round2((exact + est) / Math.max(0.5, portionsPerMeal(prefs))) };
   }
 
+  /* Andel av rättens kostnad som är kampanjvaror (0–1). */
+  function offerShare(recipe, prefs, offersById) {
+    const c = recipeCost(recipe, prefs, offersById);
+    return c.total ? c.exact / c.total : 0;
+  }
+
   /* Hittar billigare erbjudanden för samma sak i de valda butikerna (samma kategori + gemensamma ord i namnet). */
   const STOP = new Set(["eller", "med", "från", "utan", "ekologisk", "ekologiska", "ekologiskt", "dansk", "danska", "danskt", "färsk",
     "färska", "fryst", "stor", "stora", "små", "mini", "klassisk", "original", "pack", "naturell"]);
@@ -690,10 +721,10 @@
      Summerar per vara över veckan, drar av det som finns hemma, räknar hela förpackningar och föreslår billigaste butik. */
   function shoppingList(plan, prefs, offersById, allowedOffers = Object.values(offersById)) {
     const groups = new Map();
-    const factorOf = r => portionsPerMeal(prefs) / Math.max(0.5, r.servings || 1);
+    const factorOf = (r, slot) => portionsPerMeal(prefs) * ((slot && slot.mult) || 1) / Math.max(0.5, r.servings || 1);
     for (const slot of plan.slots || []) {
       const r = slot.recipe; if (!r) continue;
-      const f = factorOf(r);
+      const f = factorOf(r, slot);
       for (const ing of r.ingredients || []) {
         const o = ing.offer_id ? offersById[ing.offer_id] : null;
         const key = o ? "o:" + o.id : "n:" + normalize(ing.name);
@@ -733,7 +764,7 @@
     const exact = round2(buy.filter(i => !i.estimated).reduce((a, i) => a + i.cost, 0));
     const est = round2(buy.filter(i => i.estimated).reduce((a, i) => a + i.cost, 0));
     const total = round2(exact + est);
-    const portions = (plan.slots || []).filter(s => s.recipe).length * portionsPerMeal(prefs);
+    const portions = (plan.slots || []).reduce((a, s) => a + (s.recipe ? portionsPerMeal(prefs) * (s.mult || 1) : 0), 0);
     const savingMin = round2(buy.reduce((a, i) => a + (i.saving || 0), 0));
     const budget = prefs.budget || null;
     return {
@@ -742,6 +773,7 @@
       budget, left: budget != null ? round2(budget - total) : null,
       overBudget: budget != null && total > budget,
       itemsToBuy: buy.length, itemsAtHome: list.length - buy.length,
+      offerShare: total ? exact / total : 0,
       list,
     };
   }
@@ -822,14 +854,20 @@
   }
 
   /* Budget per portion och måltid, fördelad efter måltidernas normala andel (middag dyrare än frukost). */
-  function planBudget(prefs) {
+  function planBudget(prefs, start) {
     const total = prefs.budget || budgetRange(prefs).suggested;
-    const chosen = MEALS.filter(m => (prefs.meals || []).includes(m.id));
-    const days = (prefs.days || []).length, pm = portionsPerMeal(prefs);
-    const weight = chosen.reduce((a, m) => a + m.share, 0) || 1;
+    const pm = portionsPerMeal(prefs);
+    const cooked = planSlots(prefs, start).filter(s => s.leftoverOf == null);
+    const share = id => (MEALS.find(m => m.id === id) || { share: 0.25 }).share;
+    const weight = cooked.reduce((a, s) => a + share(s.meal) * (s.mult || 1), 0) || 1;
     const perMeal = {};
-    for (const m of chosen) perMeal[m.id] = days && pm ? round2(total * (m.share / weight) / days / pm) : 0;
-    return { total, perPortion: portionsPerWeek(prefs) ? round2(total / portionsPerWeek(prefs)) : 0, perMeal };
+    for (const id of new Set(cooked.map(s => s.meal))) {
+      const w = cooked.filter(s => s.meal === id).reduce((a, s) => a + share(id) * (s.mult || 1), 0);
+      const portions = cooked.filter(s => s.meal === id).reduce((a, s) => a + pm * (s.mult || 1), 0);
+      perMeal[id] = portions ? round2(total * (w / weight) / portions) : 0;
+    }
+    const allPortions = cooked.reduce((a, s) => a + pm * (s.mult || 1), 0);
+    return { total, perPortion: allPortions ? round2(total / allPortions) : 0, perMeal };
   }
 
   const mealLabel = id => (MEALS.find(m => m.id === id) || { label: id }).label;
@@ -847,6 +885,9 @@
       (prefs.dislikes.length || prefs.dislikeCustom.length) ? `- Använd aldrig: ${[L(prefs.dislikes, DISLIKES), ...prefs.dislikeCustom].filter(Boolean).join(", ")}.` : null,
       `- Köksutrustning som finns (använd ingen annan): ${L(prefs.appliances, APPLIANCES)}. Ange i "equipment" med id: ${prefs.appliances.join(", ")}.`,
       prefs.vibes.length ? `- Stil: ${L(prefs.vibes, VIBES)}.` : null,
+      timeLimit(prefs) ? `- TID: högst ${timeLimit(prefs)} minuter totalt per rätt (förberedelse + tillagning), sikta på ca 20. Gäller alla dagar. Ange prep_min, cook_min och time_min ärligt.` : null,
+      (prefs.vibes || []).includes("batch") && (prefs.meals || []).includes("dinner") ? `- MATLÅDA: middagarna lagas i dubbel sats och hälften blir lunch dagen efter. Välj middagar som tål att värmas upp (grytor, ugnsrätter, pasta, soppor, risrätter). Skriv ändå recepten för ${portionsPerMeal(prefs)} portioner – appen dubblar mängderna.` : null,
+      `- KAMPANJVAROR: huvudråvaran ska alltid vara en kampanjvara ur listan. Använd kampanjvaror för så många av de övriga ingredienserna som möjligt (grönsaker, mejeri, ost, bröd, frukt) – välj kampanjvaran framför en ordinarie vara när de motsvarar varandra.`,
       kcal ? `- Kalorimål per vuxen portion: ${Object.entries(kcal).map(([m, k]) => `${mealLabel(m).toLowerCase()} ca ${k} kcal`).join(", ")}${prefs.calories.protein ? `; protein totalt ca ${prefs.calories.protein} g/dag` : ""}.` : "- Inget kalorimål: balanserade, mättande måltider.",
       prefs.pantry.length ? `- Finns redan hemma, använd gärna först: ${L(prefs.pantry, PANTRY)}. Salt, peppar, olja och vatten finns alltid.` : "- Salt, peppar, olja och vatten finns alltid hemma.",
       `- Budget: ${b.total} kr för hela veckan, alltså ca ${b.perPortion} kr per portion i snitt (${Object.entries(b.perMeal).map(([m, k]) => `${mealLabel(m).toLowerCase()} ca ${k} kr`).join(", ")}). Håll dig under.`,
@@ -860,7 +901,7 @@
 
   /* Steg 1: veckans skiss. Claude ser alla platser och hela erbjudandelistan på en gång. */
   function skeletonPrompt({ prefs, offers, stores, slots: sl }) {
-    const slotLines = sl.map((s, i) => `${i}: ${dayLabel(s.day)} ${s.date} – ${mealLabel(s.meal)}`).join("\n");
+    const slotLines = sl.map((s, k) => `${s.i != null ? s.i : k}: ${dayLabel(s.day)} ${s.date} – ${mealLabel(s.meal)}${s.mult === 2 ? " (dubbel sats, hälften blir matlåda)" : ""}`).join("\n");
     return `Du planerar en veckomatsedel för ett hushåll i Köpenhamn som handlar i: ${[...new Set(offers.map(o => (stores[o.s] || {}).name))].join(", ")}.
 
 Krav:
@@ -869,7 +910,8 @@ ${constraintsText(prefs)}
 Gör en SKISS för varje plats nedan: rättens namn och vilka kampanjvaror den bygger på.
 - Bygg på kampanjvarorna i listan så att veckan blir så billig som möjligt inom budget.
 - Återanvänd råvaror mellan dagarna så att förpackningar tar slut och inget blir över (t.ex. halva kålhuvudet måndag, resten torsdag; stek blir lunch dagen efter).
-- Variera proteiner, kök och tillagning. Enkla rätter på vardagar, mer tid på helgen.
+- Variera proteiner, kök och tillagning. ${timeLimit(prefs) ? `Alla rätter ska gå att laga på högst ${timeLimit(prefs)} minuter.` : "Enkla rätter på vardagar, mer tid på helgen."}
+- Varje rätt ska bygga på minst en, gärna två–tre, kampanjvaror i "main_offer_ids".
 - Frukost får gärna vara samma 2–3 rätter som återkommer: sätt då "same_as" till platsens nummer där rätten först förekommer.
 - Lunch får gärna vara rester av gårdagens middag (skriv det i "idea").
 - Använd bara offer_id ur listan.
@@ -968,6 +1010,9 @@ ${offerLines(offers, stores)}`;
     if (r.main_offer_id && !allowedIds.has(r.main_offer_id)) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
     if (!r.main_offer_id) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
     const v = recipeViolations(r, prefs, offersById);
+    const lim = timeLimit(prefs);
+    if (lim && r.time_min && r.time_min > lim) v.push({ type: "tid", id: "quick", label: `tar ${r.time_min} min, högst ${lim} min med Snabbt & enkelt` });
+    if (!r.ingredients.some(i => i.offer_id)) v.push({ type: "kampanj", id: "none", label: "bygger inte på någon kampanjvara ur listan" });
     if (!r.ingredients.length) v.push({ type: "form", id: "ingredients", label: "Receptet saknar ingredienser" });
     if (!r.steps.length) v.push({ type: "form", id: "steps", label: "Receptet saknar instruktioner" });
     return { recipe: r, violations: v };
@@ -1007,6 +1052,7 @@ ${offerLines(offers, stores)}`;
     createPrefStore,
     PLAN_CATS, planOffers, planBudget, constraintsText, skeletonPrompt, recipesPrompt, singleRecipePrompt,
     normalizeRecipe, checkRecipe, describeViolations, snapshotOffers, pool, scaleAmount, macroShares, recipeKey,
+    planSlots, timeLimit, offerShare,
   };
   root.Planner = Planner;
   if (typeof module !== "undefined" && module.exports) module.exports = Planner;

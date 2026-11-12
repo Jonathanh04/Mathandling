@@ -257,7 +257,7 @@
       ok(violations.some(v => v.id === "nuts"));
     });
     t("Planering", "recept med saknad utrustning underkänns", () => {
-      const { violations } = P.checkRecipe({ ingredients: [{ name: "broccoli" }], steps: ["fritera"], equipment: ["airfryer"] }, planPrefs, pOffers, new Set());
+      const { violations } = P.checkRecipe({ ingredients: [{ name: "broccoli", offer_id: "b" }], steps: ["fritera"], equipment: ["airfryer"] }, planPrefs, pOffers, new Set(["b"]));
       eq(violations.map(v => v.type), ["utrustning"]);
     });
     t("Planering", "godkänt recept: huvudråvara väljs från kopplad vara", () => {
@@ -269,6 +269,44 @@
       const snap = P.snapshotOffers({ slots: [{ recipe: { main_offer_id: "b", ingredients: [{ name: "broccoli", offer_id: "b" }, { name: "lök" }] } }] }, pOffers);
       eq(Object.keys(snap), ["b"]); eq(snap.b.p, 20);
     });
+    /* --- förbättringar 1–3: tid, matlåda, kampanjvaror --- */
+    const quickP = prefs({ vibes: ["quick"], appliances: ["spis"] });
+    const okR = (extra) => ({ ingredients: [{ name: "broccoli", offer_id: "b" }], steps: ["koka"], equipment: ["spis"], ...extra });
+    t("Förbättringar", "Snabbt: rätt på 45 min underkänns", () => ok(P.checkRecipe(okR({ time_min: 45 }), quickP, pOffers, new Set(["b"])).violations.some(v => v.type === "tid")));
+    t("Förbättringar", "Snabbt: rätt på 25 min godkänns", () => eq(P.checkRecipe(okR({ time_min: 25 }), quickP, pOffers, new Set(["b"])).violations, []));
+    t("Förbättringar", "utan Snabbt får rätten ta längre tid", () => eq(P.checkRecipe(okR({ time_min: 90 }), prefs({ appliances: ["spis"] }), pOffers, new Set(["b"])).violations, []));
+    t("Förbättringar", "Snabbt nämns som krav i prompten", () => ok(P.constraintsText(quickP).includes("högst 30 minuter")));
+    t("Förbättringar", "recept utan kampanjvara underkänns", () =>
+      ok(P.checkRecipe({ ingredients: [{ name: "broccoli" }], steps: ["koka"], equipment: ["spis"] }, prefs({ appliances: ["spis"] }), pOffers, new Set(["b"])).violations.some(v => v.type === "kampanj")));
+    const batchP = prefs({ vibes: ["batch"], meals: ["dinner"], days: ["mon", "wed"], adults: 2 });
+    const MON = new Date("2026-11-16T09:00:00");
+    t("Förbättringar", "Matlåda: middag i dubbel sats och lunch dagen efter", () => {
+      const sl = P.planSlots(batchP, MON);
+      eq(sl.map(x => `${x.day}-${x.meal}-${x.mult || 1}-${x.leftoverOf ?? "-"}`), ["mon-dinner-2--", "tue-lunch-1-0", "wed-dinner-2--", "thu-lunch-1-2"]);
+    });
+    t("Förbättringar", "Matlåda: vald lunch dagen efter ersätts av rester", () => {
+      const sl = P.planSlots(prefs({ vibes: ["batch"], meals: ["lunch", "dinner"], days: ["mon", "tue"] }), MON);
+      eq(sl.map(x => `${x.day}-${x.meal}-${x.leftoverOf ?? "-"}${x.extra ? "-extra" : ""}`), ["mon-lunch--", "mon-dinner--", "tue-lunch-1", "tue-dinner--", "wed-lunch-3-extra"]);
+    });
+    t("Förbättringar", "utan Matlåda inga extra platser", () => eq(P.planSlots(prefs({ meals: ["dinner"], days: ["mon"] }), MON).length, 1));
+    t("Förbättringar", "Matlåda: dubbel mängd på inköpslistan och dubbla portioner", () => {
+      const off = { m: { id: "m", s: "netto", sv: "Nötfärs", n: "Hakket oksekød", c: "kott", p: 30, up: 60, uu: "kg" } };
+      const plan = { slots: [{ day: "mon", meal: "dinner", mult: 2, recipe: { servings: 2, ingredients: [{ name: "nötfärs", amount: "400 g", offer_id: "m" }] } },
+        { day: "tue", meal: "lunch", leftoverOf: 0, recipe: null }] };
+      const c = P.planCost(plan, prefs({ adults: 2 }), off);
+      eq([c.list[0].amounts.g, c.list[0].packs, c.portions], [800, 2, 4]);
+    });
+    t("Förbättringar", "Matlåda: budget per portion räknar med resterna", () => {
+      const b = P.planBudget({ ...batchP, budget: 400 }, MON);   // 2 middagar × 2 portioner × dubbel sats = 8 portioner
+      eq(b.perPortion, 50);
+    });
+    t("Förbättringar", "kampanjandel per rätt och för veckan", () => {
+      const off = { m: { id: "m", s: "netto", sv: "Nötfärs", n: "x", c: "kott", p: 30 } };
+      const r = { servings: 2, ingredients: [{ name: "nötfärs", amount: "1 st", offer_id: "m" }, { name: "lök", amount: "1 st", est_price: 10 }] };
+      near(P.offerShare(r, prefs({ adults: 2 }), off), 0.75);
+      near(P.planCost({ slots: [{ day: "mon", meal: "dinner", recipe: r }] }, prefs({ adults: 2 }), off).offerShare, 0.75);
+    });
+
     t("Planering", "Byt: prompten nämner rätter som ska undvikas och platsen", () => {
       const pr = P.singleRecipePrompt({ prefs: planPrefs, offers: [], stores: {}, slot: { day: "tue", date: "2026-11-17", meal: "dinner" },
         skeleton: [{ day: "mon", meal: "dinner", title: "Lasagne" }], avoidTitles: ["Kycklinggryta", "Lasagne"] });

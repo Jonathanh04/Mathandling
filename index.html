@@ -367,6 +367,14 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 .swapbtn{flex:none;display:inline-flex;align-items:center;gap:5px;height:36px;padding:0 12px;border-radius:var(--r-pill);background:var(--peach);color:var(--primary-ink);font-weight:700;font-size:13px}
 .swapbtn svg.lucide{width:15px;height:15px}
 .swapbtn.undo{background:var(--text);color:#fff}
+.lobadge{flex:none;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:var(--r-pill);background:var(--mint);color:var(--good);font-weight:700;font-size:12px}
+.lobadge svg.lucide{width:14px;height:14px}
+.meal.leftover{background:#FBFDFB}
+.shareline{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-muted)}
+.sharebar{flex:1;height:6px;border-radius:3px;background:var(--peach);overflow:hidden}
+.sharebar span{display:block;height:100%;background:var(--primary);border-radius:3px}
+.shareline b{color:var(--text);font-size:13px}
+.rbadges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .swapbtn:disabled{opacity:.5}
 .mimg{width:64px;height:64px;border-radius:16px;background:var(--bg-card);display:grid;place-items:center;flex:none;position:relative;overflow:hidden;color:var(--primary)}
 .mimg img{width:88%;height:88%;object-fit:contain;opacity:0;transition:opacity .25s}
@@ -1278,6 +1286,31 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
     return out;
   }
 
+  /* Planens platser inklusive matlåda: med vibe "Matlåda" lagas middagen i dubbel sats (mult 2) och nästa dags
+     lunch blir rester (leftoverOf = middagens index). En vald lunch ersätts; annars läggs lunchen till (extra). */
+  function planSlots(p, start = new Date()) {
+    const out = slots(p, start).map(s => ({ ...s }));
+    const batch = (p.vibes || []).includes("batch") && (p.meals || []).includes("dinner");
+    if (batch) {
+      for (const d of out.filter(x => x.meal === "dinner")) {
+        d.mult = 2;
+        const nd = new Date(d.date + "T12:00:00"); nd.setDate(nd.getDate() + 1);
+        const date = nd.toISOString().slice(0, 10), day = DAYS[(nd.getDay() + 6) % 7].id;
+        const lunch = out.find(x => x.date === date && x.meal === "lunch");
+        if (lunch) lunch.leftover = d; else out.push({ day, date, meal: "lunch", leftover: d, extra: true });
+      }
+    }
+    const order = id => MEALS.findIndex(m => m.id === id);
+    out.sort((a, b) => a.date.localeCompare(b.date) || order(a.meal) - order(b.meal));
+    out.forEach((s, i) => { s.i = i; });
+    out.forEach(s => { if (s.leftover) { s.leftoverOf = s.leftover.i; delete s.leftover; } });
+    return out;
+  }
+
+  /* Längsta tillåtna tid per rätt (min) utifrån vald stil, eller null. */
+  const QUICK_MAX = 30;
+  const timeLimit = p => (p.vibes || []).includes("quick") ? QUICK_MAX : null;
+
   /* ------------------------------------------------------------------ */
   /* 4. Mängder och enheter                                               */
   /* ------------------------------------------------------------------ */
@@ -1386,6 +1419,12 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
     return { exact: round2(exact), est: round2(est), total: round2(exact + est), perPortion: round2((exact + est) / Math.max(0.5, portionsPerMeal(prefs))) };
   }
 
+  /* Andel av rättens kostnad som är kampanjvaror (0–1). */
+  function offerShare(recipe, prefs, offersById) {
+    const c = recipeCost(recipe, prefs, offersById);
+    return c.total ? c.exact / c.total : 0;
+  }
+
   /* Hittar billigare erbjudanden för samma sak i de valda butikerna (samma kategori + gemensamma ord i namnet). */
   const STOP = new Set(["eller", "med", "från", "utan", "ekologisk", "ekologiska", "ekologiskt", "dansk", "danska", "danskt", "färsk",
     "färska", "fryst", "stor", "stora", "små", "mini", "klassisk", "original", "pack", "naturell"]);
@@ -1421,10 +1460,10 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
      Summerar per vara över veckan, drar av det som finns hemma, räknar hela förpackningar och föreslår billigaste butik. */
   function shoppingList(plan, prefs, offersById, allowedOffers = Object.values(offersById)) {
     const groups = new Map();
-    const factorOf = r => portionsPerMeal(prefs) / Math.max(0.5, r.servings || 1);
+    const factorOf = (r, slot) => portionsPerMeal(prefs) * ((slot && slot.mult) || 1) / Math.max(0.5, r.servings || 1);
     for (const slot of plan.slots || []) {
       const r = slot.recipe; if (!r) continue;
-      const f = factorOf(r);
+      const f = factorOf(r, slot);
       for (const ing of r.ingredients || []) {
         const o = ing.offer_id ? offersById[ing.offer_id] : null;
         const key = o ? "o:" + o.id : "n:" + normalize(ing.name);
@@ -1464,7 +1503,7 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
     const exact = round2(buy.filter(i => !i.estimated).reduce((a, i) => a + i.cost, 0));
     const est = round2(buy.filter(i => i.estimated).reduce((a, i) => a + i.cost, 0));
     const total = round2(exact + est);
-    const portions = (plan.slots || []).filter(s => s.recipe).length * portionsPerMeal(prefs);
+    const portions = (plan.slots || []).reduce((a, s) => a + (s.recipe ? portionsPerMeal(prefs) * (s.mult || 1) : 0), 0);
     const savingMin = round2(buy.reduce((a, i) => a + (i.saving || 0), 0));
     const budget = prefs.budget || null;
     return {
@@ -1473,6 +1512,7 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
       budget, left: budget != null ? round2(budget - total) : null,
       overBudget: budget != null && total > budget,
       itemsToBuy: buy.length, itemsAtHome: list.length - buy.length,
+      offerShare: total ? exact / total : 0,
       list,
     };
   }
@@ -1553,14 +1593,20 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
   }
 
   /* Budget per portion och måltid, fördelad efter måltidernas normala andel (middag dyrare än frukost). */
-  function planBudget(prefs) {
+  function planBudget(prefs, start) {
     const total = prefs.budget || budgetRange(prefs).suggested;
-    const chosen = MEALS.filter(m => (prefs.meals || []).includes(m.id));
-    const days = (prefs.days || []).length, pm = portionsPerMeal(prefs);
-    const weight = chosen.reduce((a, m) => a + m.share, 0) || 1;
+    const pm = portionsPerMeal(prefs);
+    const cooked = planSlots(prefs, start).filter(s => s.leftoverOf == null);
+    const share = id => (MEALS.find(m => m.id === id) || { share: 0.25 }).share;
+    const weight = cooked.reduce((a, s) => a + share(s.meal) * (s.mult || 1), 0) || 1;
     const perMeal = {};
-    for (const m of chosen) perMeal[m.id] = days && pm ? round2(total * (m.share / weight) / days / pm) : 0;
-    return { total, perPortion: portionsPerWeek(prefs) ? round2(total / portionsPerWeek(prefs)) : 0, perMeal };
+    for (const id of new Set(cooked.map(s => s.meal))) {
+      const w = cooked.filter(s => s.meal === id).reduce((a, s) => a + share(id) * (s.mult || 1), 0);
+      const portions = cooked.filter(s => s.meal === id).reduce((a, s) => a + pm * (s.mult || 1), 0);
+      perMeal[id] = portions ? round2(total * (w / weight) / portions) : 0;
+    }
+    const allPortions = cooked.reduce((a, s) => a + pm * (s.mult || 1), 0);
+    return { total, perPortion: allPortions ? round2(total / allPortions) : 0, perMeal };
   }
 
   const mealLabel = id => (MEALS.find(m => m.id === id) || { label: id }).label;
@@ -1578,6 +1624,9 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
       (prefs.dislikes.length || prefs.dislikeCustom.length) ? `- Använd aldrig: ${[L(prefs.dislikes, DISLIKES), ...prefs.dislikeCustom].filter(Boolean).join(", ")}.` : null,
       `- Köksutrustning som finns (använd ingen annan): ${L(prefs.appliances, APPLIANCES)}. Ange i "equipment" med id: ${prefs.appliances.join(", ")}.`,
       prefs.vibes.length ? `- Stil: ${L(prefs.vibes, VIBES)}.` : null,
+      timeLimit(prefs) ? `- TID: högst ${timeLimit(prefs)} minuter totalt per rätt (förberedelse + tillagning), sikta på ca 20. Gäller alla dagar. Ange prep_min, cook_min och time_min ärligt.` : null,
+      (prefs.vibes || []).includes("batch") && (prefs.meals || []).includes("dinner") ? `- MATLÅDA: middagarna lagas i dubbel sats och hälften blir lunch dagen efter. Välj middagar som tål att värmas upp (grytor, ugnsrätter, pasta, soppor, risrätter). Skriv ändå recepten för ${portionsPerMeal(prefs)} portioner – appen dubblar mängderna.` : null,
+      `- KAMPANJVAROR: huvudråvaran ska alltid vara en kampanjvara ur listan. Använd kampanjvaror för så många av de övriga ingredienserna som möjligt (grönsaker, mejeri, ost, bröd, frukt) – välj kampanjvaran framför en ordinarie vara när de motsvarar varandra.`,
       kcal ? `- Kalorimål per vuxen portion: ${Object.entries(kcal).map(([m, k]) => `${mealLabel(m).toLowerCase()} ca ${k} kcal`).join(", ")}${prefs.calories.protein ? `; protein totalt ca ${prefs.calories.protein} g/dag` : ""}.` : "- Inget kalorimål: balanserade, mättande måltider.",
       prefs.pantry.length ? `- Finns redan hemma, använd gärna först: ${L(prefs.pantry, PANTRY)}. Salt, peppar, olja och vatten finns alltid.` : "- Salt, peppar, olja och vatten finns alltid hemma.",
       `- Budget: ${b.total} kr för hela veckan, alltså ca ${b.perPortion} kr per portion i snitt (${Object.entries(b.perMeal).map(([m, k]) => `${mealLabel(m).toLowerCase()} ca ${k} kr`).join(", ")}). Håll dig under.`,
@@ -1591,7 +1640,7 @@ svg.lucide{stroke-width:1.75;width:20px;height:20px;flex:none}
 
   /* Steg 1: veckans skiss. Claude ser alla platser och hela erbjudandelistan på en gång. */
   function skeletonPrompt({ prefs, offers, stores, slots: sl }) {
-    const slotLines = sl.map((s, i) => `${i}: ${dayLabel(s.day)} ${s.date} – ${mealLabel(s.meal)}`).join("\n");
+    const slotLines = sl.map((s, k) => `${s.i != null ? s.i : k}: ${dayLabel(s.day)} ${s.date} – ${mealLabel(s.meal)}${s.mult === 2 ? " (dubbel sats, hälften blir matlåda)" : ""}`).join("\n");
     return `Du planerar en veckomatsedel för ett hushåll i Köpenhamn som handlar i: ${[...new Set(offers.map(o => (stores[o.s] || {}).name))].join(", ")}.
 
 Krav:
@@ -1600,7 +1649,8 @@ ${constraintsText(prefs)}
 Gör en SKISS för varje plats nedan: rättens namn och vilka kampanjvaror den bygger på.
 - Bygg på kampanjvarorna i listan så att veckan blir så billig som möjligt inom budget.
 - Återanvänd råvaror mellan dagarna så att förpackningar tar slut och inget blir över (t.ex. halva kålhuvudet måndag, resten torsdag; stek blir lunch dagen efter).
-- Variera proteiner, kök och tillagning. Enkla rätter på vardagar, mer tid på helgen.
+- Variera proteiner, kök och tillagning. ${timeLimit(prefs) ? `Alla rätter ska gå att laga på högst ${timeLimit(prefs)} minuter.` : "Enkla rätter på vardagar, mer tid på helgen."}
+- Varje rätt ska bygga på minst en, gärna två–tre, kampanjvaror i "main_offer_ids".
 - Frukost får gärna vara samma 2–3 rätter som återkommer: sätt då "same_as" till platsens nummer där rätten först förekommer.
 - Lunch får gärna vara rester av gårdagens middag (skriv det i "idea").
 - Använd bara offer_id ur listan.
@@ -1699,6 +1749,9 @@ ${offerLines(offers, stores)}`;
     if (r.main_offer_id && !allowedIds.has(r.main_offer_id)) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
     if (!r.main_offer_id) r.main_offer_id = (r.ingredients.find(i => i.offer_id) || {}).offer_id || null;
     const v = recipeViolations(r, prefs, offersById);
+    const lim = timeLimit(prefs);
+    if (lim && r.time_min && r.time_min > lim) v.push({ type: "tid", id: "quick", label: `tar ${r.time_min} min, högst ${lim} min med Snabbt & enkelt` });
+    if (!r.ingredients.some(i => i.offer_id)) v.push({ type: "kampanj", id: "none", label: "bygger inte på någon kampanjvara ur listan" });
     if (!r.ingredients.length) v.push({ type: "form", id: "ingredients", label: "Receptet saknar ingredienser" });
     if (!r.steps.length) v.push({ type: "form", id: "steps", label: "Receptet saknar instruktioner" });
     return { recipe: r, violations: v };
@@ -1738,6 +1791,7 @@ ${offerLines(offers, stores)}`;
     createPrefStore,
     PLAN_CATS, planOffers, planBudget, constraintsText, skeletonPrompt, recipesPrompt, singleRecipePrompt,
     normalizeRecipe, checkRecipe, describeViolations, snapshotOffers, pool, scaleAmount, macroShares, recipeKey,
+    planSlots, timeLimit, offerShare,
   };
   root.Planner = Planner;
   if (typeof module !== "undefined" && module.exports) module.exports = Planner;
@@ -2497,7 +2551,7 @@ function renderMpEntry() {
     box.innerHTML = `<div class="mphero"><span class="t-label">Veckomatsedel${range ? ` · ${range}` : ""}</span>
       <h2>${BUILD && !BUILD.error ? "Din vecka skapas …" : planExpired() ? "Förra veckans matsedel" : PLAN?.status === "accepted" ? "Veckans matsedel" : "Ett förslag väntar"}</h2>
       ${planExpired() && !BUILD ? `<p>Alla dagar i planen har passerat. Skapa en ny vecka med de senaste erbjudandena.</p>` : ""}
-      ${c ? `<div class="chips3"><span>${PLAN.slots.filter(x => x.recipe).length} måltider</span><span>${c.est > 0 ? "ca " : ""}${krR(c.total)} av ${krR(p.budget)}</span>${c.savingMin > 0 ? `<span>Sparat minst ${krR(c.savingMin)}</span>` : ""}</div>` : ""}
+      ${c ? `<div class="chips3"><span>${PLAN.slots.filter(x => x.recipe || (x.leftoverOf != null && PLAN.slots[x.leftoverOf]?.recipe)).length} måltider</span><span>${c.est > 0 ? "ca " : ""}${krR(c.total)} av ${krR(p.budget)}</span>${c.savingMin > 0 ? `<span>Sparat minst ${krR(c.savingMin)}</span>` : ""}</div>` : ""}
       <div class="acts"><button class="btn press" type="button" id="mpShow">${icon("calendar-days")}${BUILD && !BUILD.error ? "Visa förloppet" : "Visa veckan"}</button>
         ${BUILD && !BUILD.error ? "" : `<button class="ghostbtn press" type="button" id="mpNew">${icon("refresh-cw")}Ny vecka</button>`}
         <button class="ghostbtn press" type="button" id="mpEdit">${icon("settings-2")}Ändra val</button></div></div>`;
@@ -2799,36 +2853,39 @@ async function generatePlan() {
   if (!sampleFn) { toast("Planeringen fungerar när appen är öppen i Claude."); return; }
   const p = PP(), now = new Date();
   const offers = MP.planOffers(OFFERS, p, now);
-  const sl = MP.slots(p, now).map((s, i) => ({ ...s, i }));
+  const sl = MP.planSlots(p, now);                       // inkl. matlådor (leftoverOf) och dubbel sats (mult)
+  const cookSl = sl.filter(s => s.leftoverOf == null);
   if (!sl.length) { toast("Välj minst en dag och en måltid i Dina val."); return; }
   if (offers.length < 8) { toast("För få kampanjvaror i dina butiker som klarar kraven. Välj fler butiker."); return; }
   const allowedIds = new Set(offers.map(o => o.id));
   const byId = Object.fromEntries(offers.map(o => [o.id, o]));
   const ctx = { prefs: p, offers, stores: DATA.stores };
   planCtl = new AbortController(); const signal = planCtl.signal;
-  BUILD = { phase: "Planerar veckan …", done: 0, total: sl.length, error: null };
+  BUILD = { phase: "Planerar veckan …", done: 0, total: cookSl.length, error: null };
   go("plan");
   try {
     // 1. Skiss för hela veckan
-    const sk = await sampleFn.json(MP.skeletonPrompt({ ...ctx, slots: sl }), { signal, cache: false });
+    const sk = await sampleFn.json(MP.skeletonPrompt({ ...ctx, slots: cookSl }), { signal, cache: false });
     const raw = Array.isArray(sk?.slots) ? sk.slots : [];
     const skeleton = sl.map(s => {
+      if (s.leftoverOf != null) return { ...s, title: "Matlåda", idea: "", main_offer_ids: [], same_as: null };
       const x = raw.find(y => Number(y?.i) === s.i) || {};
-      const same = Number.isInteger(x.same_as) && x.same_as < s.i && sl[x.same_as]?.meal === s.meal ? x.same_as : null;
+      const same = Number.isInteger(x.same_as) && x.same_as < s.i && sl[x.same_as]?.meal === s.meal && sl[x.same_as]?.leftoverOf == null ? x.same_as : null;
       return { ...s, title: String(x.title || "").slice(0, 80) || "Rätt", idea: String(x.idea || "").slice(0, 200),
         main_offer_ids: (Array.isArray(x.main_offer_ids) ? x.main_offer_ids : []).map(String).filter(id => allowedIds.has(id)), same_as: same };
     });
     PLAN = { v: 1, id: String(Date.now()), createdAt: Date.now(), status: "draft", start: sl[0].date, prefsAt: p.updatedAt,
-      tip: String(sk?.tip || "").slice(0, 240), skeleton, slots: sl.map(s => ({ i: s.i, day: s.day, date: s.date, meal: s.meal, recipe: null, title: skeleton[s.i].title })), offers: {} };
+      tip: String(sk?.tip || "").slice(0, 240), skeleton, slots: sl.map(s => ({ i: s.i, day: s.day, date: s.date, meal: s.meal, recipe: null, title: skeleton[s.i].title,
+        ...(s.mult ? { mult: s.mult } : {}), ...(s.leftoverOf != null ? { leftoverOf: s.leftoverOf, extra: !!s.extra } : {}) })), offers: {} };
     BUILD.phase = "Skriver recepten …"; renderPlan();
 
     // 2. Fullständiga recept, några i taget, högst två anrop samtidigt
-    const unique = skeleton.filter(s => s.same_as == null);
+    const unique = skeleton.filter(s => s.same_as == null && s.leftoverOf == null);
     const chunks = []; for (let k = 0; k < unique.length; k += 3) chunks.push(unique.slice(k, k + 3));
     const place = (i, recipe) => {
       PLAN.slots[i].recipe = recipe; PLAN.slots[i].error = null;
       skeleton.filter(s => s.same_as === i).forEach(s => { PLAN.slots[s.i].recipe = recipe; PLAN.slots[s.i].error = null; });
-      BUILD.done = PLAN.slots.filter(s => s.recipe).length; renderPlan();
+      BUILD.done = PLAN.slots.filter(s => s.recipe).length; renderPlan();   // matlådor räknas inte (de har inget eget recept)
     };
     await MP.pool(chunks, 2, async chunk => {
       let res;
@@ -2853,7 +2910,7 @@ async function generatePlan() {
 
     PLAN.offers = MP.snapshotOffers(PLAN, byId);
     BUILD = null; savePlan(); renderPlan();
-    const failed = PLAN.slots.filter(s => !s.recipe).length;
+    const failed = PLAN.slots.filter(s => !s.recipe && s.leftoverOf == null).length;
     toast(failed ? `Veckan är klar, men ${failed} rätter behöver ett nytt försök.` : "Din vecka är klar!");
   } catch (err) {
     const c = err?.code;
@@ -2941,7 +2998,8 @@ function renderPlan() {
       <div class="sbar ${over ? "over" : ""}"><span style="width:${Math.max(3, pct)}%"></span></div>
       <div class="srow">${c.savingMin > 0 ? `<span class="savebadge">${icon("leaf")}Sparat minst ${krR(c.savingMin)}</span>` : `<span class="savebadge">${icon("tag")}${c.list.filter(i => i.offer).length} kampanjvaror</span>`}
         <span class="muted">${over ? `${krR(c.total - budget)} över budget` : `${krR(budget - c.total)} kvar`}</span></div>
-      <p class="status" style="margin:0">${krR(c.exact)} kampanjpriser + ca ${krR(c.est)} övriga varor · ca ${krR(c.perPortion)}/portion</p></div>
+      <div class="shareline"><span>Kampanjandel</span><span class="sharebar"><span style="width:${Math.round(c.offerShare * 100)}%"></span></span><b>${Math.round(c.offerShare * 100)} %</b></div>
+      <p class="status" style="margin:0">${krR(c.exact)} kampanjpriser + ca ${krR(c.est)} övriga varor · ca ${krR(c.perPortion)}/portion${PLAN.slots.some(x => x.leftoverOf != null) ? ` · ${PLAN.slots.filter(x => x.leftoverOf != null).length} matlådor` : ""}</p></div>
       <div class="groc2"><button class="grocery press" type="button" id="planList"><span class="gi">${icon("shopping-cart")}</span>
         <span class="tx"><b>Inköpslista</b><small>${c.itemsToBuy} varor att köpa${c.itemsAtHome ? ` · ${c.itemsAtHome} finns hemma` : ""}</small></span>${icon("chevron-right")}</button>
         <button class="iconbtn press" type="button" id="planToList" aria-label="Lägg allt på inköpslistan" style="width:52px;height:52px">${icon("list-plus")}</button></div>
@@ -2974,7 +3032,7 @@ function renderPlan() {
   on("#planOk", () => { PLAN.status = "accepted"; savePlan(); toast("Planen är sparad för hela hushållet."); setCook("m"); go("cook"); });
   on("#planNew", askNewPlan);
   on("#planDone", () => { setCook("m"); go("cook"); });
-  sec.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => { const s = PLAN.slots[+b.dataset.slot]; if (s?.recipe) openRecipe({ recipe: s.recipe, offers: PLAN.offers, slot: s.i, from: "plan" }); });
+  sec.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => { const s = PLAN.slots[+b.dataset.slot]; if (s?.recipe) openRecipe({ recipe: s.recipe, offers: PLAN.offers, slot: s.i, from: "plan", mult: s.mult || 1 }); });
   sec.querySelectorAll("[data-retry]").forEach(b => b.onclick = e => { e.stopPropagation(); retrySlot(+b.dataset.retry); });
   sec.querySelectorAll("[data-swapslot]").forEach(b => b.onclick = () => swapSlot(+b.dataset.swapslot));
   sec.querySelectorAll("[data-undo]").forEach(b => b.onclick = () => undoSwap(+b.dataset.undo));
@@ -2984,6 +3042,16 @@ function mealRow(s, offs, plan) {
   const d = dateOf(s.date), label = `${DAY_SHORT[d.getDay()]} · ${MP.MEALS.find(m => m.id === s.meal).label.toUpperCase()}`;
   const r = s.recipe, o = r?.main_offer_id ? (offs[r.main_offer_id] || BYID[r.main_offer_id]) : null;
   const bg = PASTELS[s.i % 4];
+  if (s.leftoverOf != null) {
+    const src = plan.slots[s.leftoverOf], sr = src?.recipe, so = sr?.main_offer_id ? (offs[sr.main_offer_id] || BYID[sr.main_offer_id]) : null;
+    const sd = src ? dateOf(src.date) : null;
+    return `<div class="meal leftover" style="--bg-card:${bg}"><div class="mflex">
+      <button class="mopen press" type="button" data-slot="${s.leftoverOf}" ${sr ? "" : "disabled"} aria-label="Matlåda: ${esc(sr?.title || "")}">
+        <span class="mimg">${so ? imgTag(so) : ""}<span class="ph">${icon("package")}</span></span>
+        <span class="mtx"><span class="t-label muted">${label} · MATLÅDA</span><b>${esc(sr?.title || "Rester")}</b>
+        <small>Rester från ${sd ? DAYS[sd.getDay()] : ""}ens middag${s.extra ? " · ingen extra matlagning" : ""}</small></span></button>
+      <span class="lobadge">${icon("package")}Rester</span></div></div>`;
+  }
   if (!r) {
     const sk = plan.skeleton?.[s.i];
     return `<div class="meal ${s.error ? "" : "loading"}" style="--bg-card:${bg}"><div class="mflex">
@@ -2993,7 +3061,8 @@ function mealRow(s, offs, plan) {
       ${s.error && !BUILD ? `<button class="ghostbtn press" type="button" data-retry="${s.i}" style="height:36px;padding:0 12px;font-size:13px">${icon("refresh-cw")}Försök igen</button>` : ""}</div></div>`;
   }
   const cost = MP.recipeCost(r, PP(), offs);
-  const meta = [r.time_min ? `${r.time_min} min` : null, r.kcal ? `ca ${r.kcal} kcal` : null, `ca ${krR(cost.perPortion)}/port.`].filter(Boolean).join(" · ");
+  const share = cost.total ? Math.round(cost.exact / cost.total * 100) : 0;
+  const meta = [r.time_min ? `${r.time_min} min` : null, r.kcal ? `ca ${r.kcal} kcal` : null, `ca ${krR(cost.perPortion)}/port.`, `${share} % kampanj`, s.mult === 2 ? "dubbel sats" : null].filter(Boolean).join(" · ");
   const canUndo = s.prev && (s.prevUntil || 0) > Date.now();
   return `<div class="meal" style="--bg-card:${bg}"><div class="mflex">
     <button class="mopen press" type="button" data-slot="${s.i}" aria-label="Öppna receptet ${esc(r.title)}">
@@ -3084,7 +3153,7 @@ function ingIcon(ing, o) {
 /* ---------- öppna ett recept ---------- */
 function openRecipe(ctx) {
   RCTX = { offers: {}, ...ctx };
-  rPortions = MP.portionsPerMeal(PP()) || ctx.recipe.servings || 2; rMetric = false; rTab = "ing";
+  rPortions = (MP.portionsPerMeal(PP()) || ctx.recipe.servings || 2) * (ctx.mult || 1); rMetric = false; rTab = "ing";
   go("recipe");
 }
 
@@ -3107,6 +3176,8 @@ function renderRecipe() {
     </div>
     <div class="dbody">
       <div><h1 class="t-screen">${esc(r.title)}</h1>${r.description ? `<p class="dtext" style="margin-top:6px">${esc(r.description)}</p>` : ""}
+        <div class="rbadges">${(() => { const sh = Math.round(MP.offerShare(r, PP(), offs) * 100); return `<span class="savebadge">${icon("tag")}Kampanjandel ${sh} %</span>`; })()}
+          ${RCTX.mult === 2 ? `<span class="savebadge" style="background:var(--peach);color:var(--primary-ink)">${icon("package")}Dubbel sats · matlåda imorgon</span>` : ""}</div>
         ${RCTX.from === "plan" && RCTX.slot != null ? `<button class="swapbtn press" type="button" id="rSwap" style="margin-top:10px">${icon("shuffle")}Byt den här rätten</button>` : ""}</div>
       <div class="ractions">
         <button class="ract press" type="button" id="rSave" aria-pressed="${saved}"><span>${icon(saved ? "bookmark-check" : "bookmark")}</span>${saved ? "Sparat" : "Spara"}</button>
