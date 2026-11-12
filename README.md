@@ -25,6 +25,8 @@ Appen visar veckans erbjudanden från butikerna vi handlar i, i Köpenhamn:
 | `data.json` | Senast hämtade erbjudanden |
 | `translations.json` | Danska produktnamn → svenska |
 | `history.json` | Prishistorik: kampanjpriser per vara och butik över tid (byggs på varje vecka) |
+| `planner.js` | Logiken bakom veckomatsedeln: hårda filter (allergier, kost, ogillar, utrustning), budget, inköpslista, sparning av hushållets val |
+| `planner.test.js`, `tests.html`, `run_tests.sh` | Tester för planner.js: öppna tests.html via lokal server, eller kör `./run_tests.sh` |
 | `backfill_history.py` | Engångsskript som fyllde historiken från äldre `data.json` i git |
 | `images/` | Genereras av skriptet: frilagda produktbilder (WebP) i små JSON-filer. Ingår inte i git. |
 

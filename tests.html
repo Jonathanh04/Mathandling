@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Planner-tester</title>
+<style>
+  :root{ --bg:#fff; --ink:#1C1C1E; --muted:#6E6E73; --line:#F3DED3; --good:#1F7A50; --good-bg:#E3F4EC; --bad:#B42318; --bad-bg:#FDECEA; --soft:#FDEFE6; color-scheme:light }
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Plus Jakarta Sans",system-ui,sans-serif;padding:24px 20px 60px;max-width:980px;margin-inline:auto}
+  h1{font-size:22px;margin:0 0 4px} h2{font-size:17px;margin:28px 0 8px}
+  .sum{display:inline-flex;gap:8px;align-items:center;padding:8px 14px;border-radius:999px;font-weight:700;margin:10px 0}
+  .sum.ok{background:var(--good-bg);color:var(--good)} .sum.fail{background:var(--bad-bg);color:var(--bad)}
+  details{border:1px solid var(--line);border-radius:14px;margin:8px 0;padding:4px 14px}
+  summary{cursor:pointer;font-weight:600;padding:8px 0}
+  .t{display:flex;gap:8px;padding:3px 0;font-size:13px}
+  .t .m{flex:none;width:18px;font-weight:700}
+  .t.ok .m{color:var(--good)} .t.fail{color:var(--bad)}
+  .err{color:var(--bad);font-size:12px;margin-left:26px}
+  .muted{color:var(--muted)}
+  table{border-collapse:collapse;width:100%;font-size:13px} td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:12px;color:var(--muted);font-weight:600}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:var(--soft);border-radius:999px;padding:2px 9px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>Tester för veckomatsedelns logik</h1>
+<p class="muted">Kör <code>planner.test.js</code> mot <code>planner.js</code>, och kontrollerar sedan filtren mot veckans riktiga erbjudanden i <code>data.json</code>.</p>
+<div id="summary"></div>
+<div id="groups"></div>
+<h2>Kontroll mot veckans erbjudanden</h2>
+<p class="muted">För varje val: hur många matvaror som filtreras bort, och vilka som finns kvar i kategorier där man kan misstänka att något slunkit igenom. Läs listan "kvar" med ögonen.</p>
+<div id="audit" class="muted">Laddar data.json …</div>
+
+<script src="planner.js"></script>
+<script src="planner.test.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+PlannerTests.runTests(Planner).then(r => {
+  $("#summary").innerHTML = `<span class="sum ${r.failed ? "fail" : "ok"}">${r.failed ? "✗" : "✓"} ${r.passed} godkända, ${r.failed} misslyckade av ${r.results.length}</span>`;
+  const groups = {};
+  r.results.forEach(x => (groups[x.group] ??= []).push(x));
+  $("#groups").innerHTML = Object.entries(groups).map(([g, xs]) => {
+    const f = xs.filter(x => !x.ok).length;
+    return `<details ${f ? "open" : ""}><summary>${esc(g)} <span class="muted">${xs.length - f}/${xs.length}</span></summary>
+      ${xs.map(x => `<div class="t ${x.ok ? "ok" : "fail"}"><span class="m">${x.ok ? "✓" : "✗"}</span><span>${esc(x.name)}</span></div>${x.ok ? "" : `<div class="err">${esc(x.error)}</div>`}`).join("")}</details>`;
+  }).join("");
+});
+
+fetch("data.json").then(r => r.json()).then(D => {
+  const P = Planner, nonfood = new Set(["ovrigt", "hushall", "hygien", "djur"]);
+  const food = D.offers.filter(o => !nonfood.has(o.c));
+  const cases = [
+    ["Mjölkallergi", { allergies: ["milk"] }, ["mejeri", "ost"]],
+    ["Glutenallergi", { allergies: ["gluten"] }, ["brod", "torr"]],
+    ["Ägg", { allergies: ["egg"] }, ["mejeri"]],
+    ["Nötter", { allergies: ["nuts"] }, ["godis"]],
+    ["Fisk + skaldjur", { allergies: ["fish", "shellfish"] }, ["fisk"]],
+    ["Vegetariskt", { diet: "vegetarian" }, ["kott", "chark", "fisk"]],
+    ["Veganskt", { diet: "vegan" }, ["mejeri", "ost", "kott", "chark", "fisk"]],
+    ["Keto", { diet: "keto" }, ["brod", "torr"]],
+  ];
+  $("#audit").classList.remove("muted");
+  $("#audit").innerHTML = `<p class="muted">${food.length} matvaror i data.json (uppdaterad ${esc(D.updated.slice(0, 10))}).</p><table>
+    <tr><th>Val</th><th>Bort</th><th>Kvar i misstänkta kategorier</th></tr>
+    ${cases.map(([label, patch, cats]) => {
+      const p = P.sanitizePrefs({ ...P.defaultPrefs(), ...patch });
+      let ex = 0; const kept = [];
+      for (const o of food) {
+        const v = P.violations({ text: P.offerText(o), name: P.offerName(o), cat: o.c }, p);
+        if (v.length) ex++; else if (cats.includes(o.c)) kept.push(o.sv || o.n);
+      }
+      const uniq = [...new Set(kept)];
+      return `<tr><td><b>${esc(label)}</b></td><td>${ex}</td><td><div class="chips">${uniq.slice(0, 40).map(n => `<span class="chip">${esc(n)}</span>`).join("") || '<span class="muted">inga</span>'}${uniq.length > 40 ? `<span class="muted">+${uniq.length - 40} till</span>` : ""}</div></td></tr>`;
+    }).join("")}</table>`;
+}).catch(() => { $("#audit").textContent = "Kunde inte läsa data.json. Öppna sidan via en lokal server (python3 -m http.server)."; });
+</script>
+</body>
+</html>
